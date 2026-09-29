@@ -12,6 +12,7 @@ Operations:
 - search: Search bookmarks by query string (matches title/url) or by {title, url} object.
 - get_recent: Get the most recently added bookmarks (numberOfItems, default 10).
 - create: Create a bookmark (with url) or a folder (without url), optionally at parentId/index.
+- update: Rename a bookmark/folder (and/or change its url). Use list_tree/search first to get ids.
 - move: Move a bookmark/folder to another parent (parentId) and/or position (index).
 - remove: Delete a single bookmark or an EMPTY folder. Fails on non-empty folders; use remove_tree for those.
 - remove_tree: Recursively delete a bookmark folder and ALL its contents. Requires confirm: true.
@@ -28,6 +29,7 @@ const bookmarksSchema = Type.Object({
 			Type.Literal("search"),
 			Type.Literal("get_recent"),
 			Type.Literal("create"),
+			Type.Literal("update"),
 			Type.Literal("move"),
 			Type.Literal("remove"),
 			Type.Literal("remove_tree"),
@@ -55,10 +57,12 @@ const bookmarksSchema = Type.Object({
 	parentId: Type.Optional(Type.String({ description: "Target parent folder id (for 'create', 'move')" })),
 	title: Type.Optional(
 		Type.String({
-			description: "Title for 'create' (also renames on 'move' is not supported — use create + remove instead)",
+			description: "Title for 'create'; new title for 'update'",
 		}),
 	),
-	url: Type.Optional(Type.String({ description: "URL for 'create'. Omit to create a folder" })),
+	url: Type.Optional(
+		Type.String({ description: "URL for 'create'. Omit to create a folder. For 'update': new URL (optional)" }),
+	),
 	index: Type.Optional(Type.Number({ description: "Position within the parent (0-based, for 'create' and 'move')" })),
 	confirm: Type.Optional(Type.Boolean({ description: "Must be explicitly true for 'remove_tree'" })),
 });
@@ -162,6 +166,8 @@ export class BookmarksTool implements AgentTool<typeof bookmarksSchema, Bookmark
 				return this.getRecent(args.numberOfItems ?? 10);
 			case "create":
 				return this.create(args);
+			case "update":
+				return this.update(args);
 			case "move":
 				return this.move(args);
 			case "remove":
@@ -252,6 +258,41 @@ export class BookmarksTool implements AgentTool<typeof bookmarksSchema, Bookmark
 		};
 		return {
 			content: [{ type: "text", text: JSON.stringify(slimNode(created, 0, 0)) }],
+			details,
+		};
+	}
+
+	private async update(args: BookmarksParams): Promise<AgentToolResult<BookmarksDetails>> {
+		const id = args.id;
+		if (id === undefined) throw new Error("'id' is required for update operation");
+		if (args.title === undefined && args.url === undefined) {
+			throw new Error("Provide at least one of 'title' or 'url' for update operation");
+		}
+		if (PROTECTED_IDS.has(id)) {
+			throw new Error(`Cannot update special folder with id "${id}" (root/Bookmarks Bar/Other Bookmarks)`);
+		}
+
+		const [node] = await call(() => chrome.bookmarks.get(id));
+		if (!node) throw new Error(`Bookmark node "${id}" not found`);
+
+		const changes: { title?: string; url?: string } = {};
+		if (args.title !== undefined) changes.title = args.title;
+		if (args.url !== undefined) {
+			if (node.url === undefined) {
+				throw new Error(`"${node.title}" is a folder and cannot have a URL`);
+			}
+			changes.url = args.url;
+		}
+
+		const updated = await call(() => chrome.bookmarks.update(id, changes));
+
+		const details: BookmarksDetails = {
+			operation: "update",
+			nodeCount: 1,
+			summary: `Renamed "${node.title}" to "${updated.title}"`,
+		};
+		return {
+			content: [{ type: "text", text: JSON.stringify(slimNode(updated, 0, 0)) }],
 			details,
 		};
 	}

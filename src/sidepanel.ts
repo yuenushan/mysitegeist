@@ -47,6 +47,7 @@ import { Toast } from "./components/Toast.js";
 import { AboutTab } from "./dialogs/AboutTab.js";
 import { ApiKeyOrOAuthDialog } from "./dialogs/ApiKeyOrOAuthDialog.js";
 import { ApiKeysOAuthTab } from "./dialogs/ApiKeysOAuthTab.js";
+import { BrowsingTab } from "./dialogs/BrowsingTab.js";
 import { CostsTab } from "./dialogs/CostsTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
@@ -67,7 +68,10 @@ import { createWelcomeMessage, registerWelcomeRenderer } from "./messages/Welcom
 import { isOAuthCredentials, resolveApiKey } from "./oauth/index.js";
 import { SYSTEM_PROMPT } from "./prompts/prompts.js";
 import { SitegeistAppStorage } from "./storage/app-storage.js";
+import { AgentSchedulerTool, registerAgentSchedulerRenderer } from "./tools/agent-scheduler.js";
 import { BookmarksTool, registerBookmarksRenderer } from "./tools/bookmarks.js";
+import { BrowserExtensionsTool, registerBrowserExtensionsRenderer } from "./tools/browser-extensions.js";
+import { BrowserWorkspaceTool, registerBrowserWorkspaceRenderer } from "./tools/browser-workspace.js";
 import { DebuggerTool } from "./tools/debugger.js";
 import { ExtractImageTool, registerExtractImageRenderer } from "./tools/extract-image.js";
 import { AskUserWhichElementTool, skillTool } from "./tools/index.js";
@@ -85,6 +89,9 @@ registerNavigationRenderer();
 registerCompactionRenderer();
 registerExtractImageRenderer();
 registerBookmarksRenderer();
+registerBrowserExtensionsRenderer();
+registerBrowserWorkspaceRenderer();
+registerAgentSchedulerRenderer();
 
 // Listen for abort messages from REPL overlay
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -219,6 +226,7 @@ function openApiKeysDialog(): Promise<void> {
 				new ApiKeysOAuthTab(),
 				new CostsTab(),
 				new SkillsTab(),
+				new BrowsingTab(),
 				new ProxyTab(),
 				new AboutTab(),
 			],
@@ -655,6 +663,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 	});
 
 	await updateAuthLabel();
+	await loadBrowsingSettings();
 
 	if (shouldSave) {
 		agentUnsubscribe = agent.subscribe((event: AgentEvent) => {
@@ -768,6 +777,10 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 		onBeforeSend: async (input: string) => {
 			if (!agent) return false;
 
+			// Any explicit user prompt counts as activity for navigation gating
+			lastUserInteraction = Date.now();
+			idleNavCount = 0;
+
 			const trimmed = input.trim();
 			if (trimmed.startsWith("/compact")) {
 				const instructions = trimmed.slice("/compact".length).trim();
@@ -843,6 +856,9 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			extractImageTool.windowId = currentWindowId;
 
 			const bookmarksTool = new BookmarksTool();
+			const browserExtensionsTool = new BrowserExtensionsTool();
+			const browserWorkspaceTool = new BrowserWorkspaceTool();
+			const schedulerTool = new AgentSchedulerTool();
 
 			const tools: AgentTool<any, any>[] = [
 				navigateTool,
@@ -852,6 +868,9 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				extractDocumentTool,
 				extractImageTool,
 				bookmarksTool,
+				browserExtensionsTool,
+				browserWorkspaceTool,
+				schedulerTool,
 			];
 
 			// Conditionally add debugger tool if enabled
@@ -1032,6 +1051,7 @@ const renderApp = () => {
 								new ApiKeysOAuthTab(),
 								new CostsTab(),
 								new SkillsTab(),
+								new BrowsingTab(),
 								new ProxyTab(),
 								new AboutTab(),
 							]),
@@ -1052,48 +1072,146 @@ const renderApp = () => {
 // TAB NAVIGATION TRACKING
 // ============================================================================
 
-// Listen for tab updates and insert navigation messages only when agent is running
+// Activity gating (bugfix: navigation events must not wake idle sessions).
+// - While the agent is streaming, navigations are only steered into the run
+//   if the user interacted recently; otherwise they are dropped so a walked-
+//   away-from run cannot be extended into an endless nav-chasing loop.
+// - While idle, navigations are recorded silently (visible in the transcript
+//   and available to the next prompt) but never trigger an LLM run - unless
+//   "browse follow" is enabled and the user is still active.
+const DEFAULT_ACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+const IDLE_NAV_MAX_PER_SESSION = 50;
+let lastUserInteraction = Date.now();
+let idleNavCount = 0;
+let browsingFollowEnabled = false;
+let browsingActivityTimeoutMs = DEFAULT_ACTIVITY_TIMEOUT_MS;
+
+async function loadBrowsingSettings(): Promise<void> {
+	try {
+		const follow = await storage.settings.get<boolean>("browsing.follow");
+		if (follow !== null && follow !== undefined) browsingFollowEnabled = follow;
+		const timeout = await storage.settings.get<number>("browsing.activityTimeoutMinutes");
+		if (timeout !== null && timeout !== undefined && timeout > 0) {
+			browsingActivityTimeoutMs = timeout * 60 * 1000;
+		}
+	} catch (error) {
+		console.error("Failed to load browsing settings:", error);
+	}
+}
+
+const isUserActive = (): boolean => Date.now() - lastUserInteraction < browsingActivityTimeoutMs;
+
+async function handleNavigationEvent(tab: chrome.tabs.Tab): Promise<void> {
+	if (!agent || !tab.url) return;
+	const navMessage = await createNavigationMessage(tab.url, tab.title || "Untitled", tab.favIconUrl, tab.id);
+
+	if (agent.state.isStreaming) {
+		// Active agentic run: follow along only while the user is present
+		if (isUserActive()) {
+			agent.steer(navMessage);
+			console.log("Steered navigation message for", tab.url);
+		} else {
+			console.log("Dropped navigation while streaming (user inactive):", tab.url);
+		}
+		return;
+	}
+
+	// Idle: record silently so the next prompt knows what the user looked at
+	if (idleNavCount >= IDLE_NAV_MAX_PER_SESSION) {
+		console.log("Idle navigation recording limit reached, dropping:", tab.url);
+		return;
+	}
+	idleNavCount++;
+
+	if (browsingFollowEnabled && isUserActive()) {
+		// Browse follow: wake the agent on the navigation (prompt appends the message itself)
+		agent.prompt(navMessage).catch((err: unknown) => {
+			console.error("Browse-follow prompt failed:", err);
+		});
+		return;
+	}
+	agent.appendMessage(navMessage);
+	chatPanel.agentInterface?.requestUpdate();
+	if (currentSessionId) {
+		saveSession().catch((err: unknown) => console.error("Failed to save session after idle nav:", err));
+	}
+}
+
+// Listen for tab updates and handle navigation events per the gating rules above
 chrome.tabs.onUpdated.addListener(async (_tabId, changeInfo, tab) => {
-	// Only care about URL changes on the active tab while agent is working
-	// Ignore chrome-extension:// URLs (extension internal pages)
+	if (!changeInfo.url || !tab.active || !tab.url || tab.windowId !== currentWindowId) return;
+	// Ignore extension internal pages
+	if (tab.url.startsWith("chrome-extension://") || tab.url.startsWith("moz-extension://")) return;
 	// Ignore tool-initiated navigations (handled by the navigate tool itself)
-	// Ignore tabs from other windows
-	if (
-		changeInfo.url &&
-		tab.active &&
-		tab.url &&
-		tab.windowId === currentWindowId &&
-		agent?.state.isStreaming &&
-		!tab.url.startsWith("chrome-extension://") &&
-		!tab.url.startsWith("moz-extension://") &&
-		!isToolNavigating()
-	) {
-		const navMessage = await createNavigationMessage(tab.url, tab.title || "Untitled", tab.favIconUrl, tab.id);
-		agent.steer(navMessage);
-		console.log("Queued navigation message for tab switch to", tab.url);
-	}
+	if (isToolNavigating()) return;
+	await handleNavigationEvent(tab);
 });
 
-// Listen for tab activation (user switches tabs) only when agent is running
+// Listen for tab activation (user switches tabs)
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-	// Ignore tab activations from other windows
 	if (activeInfo.windowId !== currentWindowId) return;
-
 	const tab = await chrome.tabs.get(activeInfo.tabId);
-	// Ignore chrome-extension:// URLs (extension internal pages)
-	// Ignore tool-initiated navigations (handled by the navigate tool itself)
-	if (
-		tab.url &&
-		agent?.state.isStreaming &&
-		!tab.url.startsWith("chrome-extension://") &&
-		!tab.url.startsWith("moz-extension://") &&
-		!isToolNavigating()
-	) {
-		const navMessage = await createNavigationMessage(tab.url, tab.title || "Untitled", tab.favIconUrl, tab.id);
-		agent.steer(navMessage);
-		console.log("Queued navigation message for tab switch to", tab.url);
-	}
+	if (!tab.url) return;
+	if (tab.url.startsWith("chrome-extension://") || tab.url.startsWith("moz-extension://")) return;
+	if (isToolNavigating()) return;
+	await handleNavigationEvent(tab);
 });
+
+// ============================================================================
+// CONTEXT MENU ACTIONS (from background service worker)
+// ============================================================================
+
+chrome.runtime.onMessage.addListener((message: unknown) => {
+	if ((message as { type?: string })?.type !== "context-action") return;
+	void handleContextAction(message as ContextActionMessage);
+});
+
+interface ContextActionMessage {
+	type: "context-action";
+	verb: string;
+	selectionText?: string;
+	linkUrl?: string;
+	pageUrl?: string;
+}
+
+async function handleContextAction(message: ContextActionMessage): Promise<void> {
+	if (!agent) return;
+	if (agent.state.isStreaming) {
+		Toast.error("Wait for the current response to finish");
+		return;
+	}
+	if (compacting) {
+		Toast.error("Compaction in progress");
+		return;
+	}
+
+	let prompt: string;
+	switch (message.verb) {
+		case "summarize-selection":
+			prompt = `请总结以下内容:\n\n${message.selectionText ?? ""}`;
+			break;
+		case "translate-selection":
+			prompt = `翻译以下内容(中文译为英文,其他语言译为中文),直接给出翻译结果:\n\n${message.selectionText ?? ""}`;
+			break;
+		case "explain-selection":
+			prompt = `解释以下内容的含义,用简洁的中文:\n\n${message.selectionText ?? ""}`;
+			break;
+		case "analyze-link":
+			prompt = `打开并分析这个链接的内容,给出摘要: ${message.linkUrl ?? ""}`;
+			break;
+		case "summarize-page":
+			prompt = `总结当前页面 ${message.pageUrl ?? ""} 的主要内容`;
+			break;
+		default:
+			return;
+	}
+
+	lastUserInteraction = Date.now();
+	agent.prompt(prompt).catch((err: unknown) => {
+		console.error("Context-action prompt failed:", err);
+		Toast.error(`Failed to run context action: ${(err as Error).message}`);
+	});
+}
 
 // ============================================================================
 // KEYBOARD SHORTCUTS

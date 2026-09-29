@@ -38,7 +38,17 @@
 		"webNavigation",
 		"debugger",
 		"declarativeNetRequest",
-		"bookmarks"
+		"bookmarks",
+		"management",
+		"tabs",
+		"tabGroups",
+		"history",
+		"sessions",
+		"downloads",
+		"readingList",
+		"contextMenus",
+		"alarms",
+		"notifications"
 	],
 	"host_permissions": [
 		"http://*/*",

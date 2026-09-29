@@ -17,6 +17,12 @@ declare module "@mariozechner/mini-lit" {
 
 		// Session tree dialog
 		"Compacting context...": string;
+		Browsing: string;
+		"Browse follow": string;
+		"Activity timeout (minutes)": string;
+		"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.": string;
+		"When enabled, navigating to a page while the agent is idle (and you were active recently) wakes the agent to react to the page. Off by default.": string;
+		"Navigations after this many minutes without a prompt are treated as idle browsing: they are recorded silently and never trigger or extend a response.": string;
 		"Session branches": string;
 		"Jump to a previous point; the next message starts a new branch there": string;
 		"No branch points yet": string;
@@ -200,6 +206,15 @@ const sitegeistTranslations = {
 			"A new version ({version}) is available. Please update to continue.",
 		"Update Now": "Update Now",
 		"Compacting context...": "Compacting context...",
+		Browsing: "Browsing",
+		"Browse follow": "Browse follow",
+		"Activity timeout (minutes)": "Activity timeout (minutes)",
+		"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.":
+			"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.",
+		"When enabled, navigating to a page while the agent is idle (and you were active recently) wakes the agent to react to the page. Off by default.":
+			"When enabled, navigating to a page while the agent is idle (and you were active recently) wakes the agent to react to the page. Off by default.",
+		"Navigations after this many minutes without a prompt are treated as idle browsing: they are recorded silently and never trigger or extend a response.":
+			"Navigations after this many minutes without a prompt are treated as idle browsing: they are recorded silently and never trigger or extend a response.",
 		"Session branches": "Session branches",
 		"Jump to a previous point; the next message starts a new branch there":
 			"Jump to a previous point; the next message starts a new branch there",
@@ -305,6 +320,15 @@ const sitegeistTranslations = {
 			"Eine neue Version ({version}) ist verfügbar. Bitte aktualisieren Sie, um fortzufahren.",
 		"Update Now": "Jetzt aktualisieren",
 		"Compacting context...": "Kontext wird komprimiert ...",
+		Browsing: "Browsing",
+		"Browse follow": "Browsing folgen",
+		"Activity timeout (minutes)": "Inaktivit\u00e4tsschwellwert (Minuten)",
+		"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.":
+			"Steuert, wie Seitennavigationen mit dem Agenten interagieren. Navigationen werden immer im Sitzungsverlauf aufgezeichnet; ob sie eine Antwort ausl\u00f6sen d\u00fcrfen, wird unten geregelt.",
+		"When enabled, navigating to a page while the agent is idle (and you were active recently) wakes the agent to react to the page. Off by default.":
+			"Wenn aktiviert, weckt eine Navigation zu einer Seite den Agenten (im Leerlauf und bei k\u00fcrzlicher Aktivit\u00e4t), um auf die Seite zu reagieren. Standardm\u00e4\u00dfig aus.",
+		"Navigations after this many minutes without a prompt are treated as idle browsing: they are recorded silently and never trigger or extend a response.":
+			"Navigationen nach so vielen Minuten ohne Eingabe gelten als inaktives Browsing: sie werden still aufgezeichnet und l\u00f6sen niemals eine Antwort aus oder verl\u00e4ngern diese.",
 		"Session branches": "Sitzungs-Zweige",
 		"Jump to a previous point; the next message starts a new branch there":
 			"Zu einem früheren Punkt springen; die nächste Nachricht startet dort einen neuen Zweig",

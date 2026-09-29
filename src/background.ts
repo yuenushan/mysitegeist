@@ -1,4 +1,109 @@
+import { handleAlarmFired } from "./tools/agent-scheduler.js";
 import type { LockedSessionsMessage, LockResultMessage, SidepanelToBackgroundMessage } from "./utils/port.js";
+
+// ============================================================================
+// CONTEXT MENUS (Task: right-click integration)
+// ============================================================================
+// MV3: register at top level so menus are (re)created on every service worker
+// wake; removeAll first to avoid duplicate-id errors.
+
+const CONTEXT_ACTION = "sitegeist-context-action";
+
+chrome.contextMenus.removeAll(() => {
+	const parentId = CONTEXT_ACTION;
+	chrome.contextMenus.create({
+		id: parentId,
+		title: "Sitegeist",
+		contexts: ["selection", "link", "page"],
+	});
+	chrome.contextMenus.create({
+		id: `${parentId}-summarize-selection`,
+		title: "发送给 Sitegeist 总结",
+		contexts: ["selection"],
+		parentId,
+	});
+	chrome.contextMenus.create({
+		id: `${parentId}-translate-selection`,
+		title: "翻译选中文本",
+		contexts: ["selection"],
+		parentId,
+	});
+	chrome.contextMenus.create({
+		id: `${parentId}-explain-selection`,
+		title: "解释选中文本",
+		contexts: ["selection"],
+		parentId,
+	});
+	chrome.contextMenus.create({
+		id: `${parentId}-read-later`,
+		title: "把链接加入稍后读",
+		contexts: ["link"],
+		parentId,
+	});
+	chrome.contextMenus.create({
+		id: `${parentId}-analyze-link`,
+		title: "用 Sitegeist 分析此链接",
+		contexts: ["link"],
+		parentId,
+	});
+	chrome.contextMenus.create({
+		id: `${parentId}-summarize-page`,
+		title: "总结此页面",
+		contexts: ["page"],
+		parentId,
+	});
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+	const menuId = info.menuItemId;
+	if (typeof menuId !== "string" || !menuId.startsWith(CONTEXT_ACTION)) return;
+	const verb = menuId.slice(CONTEXT_ACTION.length + 1);
+
+	if (verb === "read-later") {
+		// Direct reading-list write, no AI involved
+		const url = info.linkUrl;
+		if (!url) return;
+		try {
+			await chrome.readingList.addEntry({ url, title: info.selectionText || url, hasBeenRead: false });
+		} catch {
+			// Duplicate URL or API error: ignore silently (menu action)
+		}
+		return;
+	}
+
+	// AI actions: open the side panel and hand the payload to the sidepanel
+	if (!tab?.id) return;
+	try {
+		await chrome.sidePanel.open({ tabId: tab.id });
+	} catch (error) {
+		console.error("[Background] Failed to open side panel from context menu:", error);
+		return;
+	}
+	chrome.runtime.sendMessage({
+		type: "context-action",
+		verb,
+		selectionText: info.selectionText,
+		linkUrl: info.linkUrl,
+		pageUrl: info.pageUrl,
+	});
+});
+
+// ============================================================================
+// ALARMS + NOTIFICATIONS (scheduler)
+// ============================================================================
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+	handleAlarmFired(alarm).catch((error) => console.error("[Background] Alarm handler failed:", error));
+});
+
+chrome.notifications.onClicked.addListener(() => {
+	// Clicking any Sitegeist notification opens the side panel
+	chrome.windows.getLastFocused({}, (window) => {
+		if (window.id !== undefined) {
+			chrome.sidePanel.open({ windowId: window.id }).catch(() => {});
+		}
+	});
+});
 
 // Called when Sitegeist icon is clicked - opens sidepanel for current tab
 chrome.action.onClicked.addListener((tab: chrome.tabs.Tab) => {

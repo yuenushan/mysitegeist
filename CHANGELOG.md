@@ -9,6 +9,15 @@
 - Context compaction ported from pi 0.87.1: automatic compaction between turns when context usage exceeds the model's window minus a reserve, manual compaction via a context usage badge in the header, and a collapsible summary entry in the transcript
 - Compaction summaries re-enter the LLM context as a `<context-summary>` user message and support iterative updates across repeated compactions
 - Live compaction preview: while a compaction runs, a status card with the streaming summary text appears at the end of the chat flow (AgentInterface gains a host-owned transientContent slot; SummaryRequest streams cumulative text via onDelta)
+- browser_extensions tool: list/get/enable/disable/uninstall installed extensions via chrome.management; refuses to disable or uninstall the extension itself; uninstall requires confirm:true
+- browser_workspace tool: list/close/group/ungroup tabs, search history, recently-closed sessions with restore, download list and pause/resume/cancel/show/open, reading list add/list/mark_read/remove keyed by URL; destructive operations (closing >5 tabs, download cancel) require confirm:true
+- agent_scheduler tool: named alarm schedules and one-off system notifications; fired alarms show lightweight notifications from the service worker (no LLM work in the background); clicking a notification opens the side panel
+- Context menu integration: Sitegeist submenu on selections, links and pages - send-to-summarize, translate, explain, add link to reading list (direct API write, no AI), analyze link, summarize page; AI actions open the side panel and auto-run a prefilled prompt
+- Bookmarks tool gains an update operation (rename/re-url) via chrome.bookmarks.update
+
+### Changed
+
+- Navigation events are now activity-gated: while the agent is streaming, navigations are only steered into the run if the user interacted within the activity timeout (default 5 minutes, configurable), preventing a walked-away-from run from being extended into an endless nav-chasing loop; while idle, navigations are recorded silently and never trigger a response unless "Browse follow" is enabled (default off, new Browsing settings tab)
 
 ### Fixed
 
