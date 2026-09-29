@@ -81,3 +81,46 @@ site/
 static/
   manifest.chrome.json  # Extension manifest (version lives here)
 ```
+
+## Fork Notes (yuenushan/mysitegeist)
+
+This fork adds local-only conventions on top of upstream. Keep this section
+when merging upstream changes.
+
+### Remotes
+- `origin` = upstream badlogic/sitegeist (fetch-only in practice)
+- `fork` = git@github.com:yuenushan/mysitegeist.git (push work here)
+
+### Dependency pinning (IMPORTANT)
+- `../pi-mono` MUST be the 2026-03-24 snapshot (upstream commit `21950c5ba4`).
+  Upstream pi-mono removed `packages/web-ui` on 2026-05-20, which breaks this
+  repo. The snapshot was installed from a GitHub tarball (no `.git` dir).
+  Do NOT run `git pull` inside `../pi-mono`.
+- `../mini-lit` is at HEAD (0.2.1) and needs `npm run build` once (tsc -> dist/).
+- If `node_modules/@mariozechner/pi-web-ui` resolves to a non-existent path,
+  the pi-mono snapshot was lost — re-download the tarball for `21950c5ba4`.
+
+### Build & install workflow (this machine)
+- Do NOT use `./dev.sh` / `npm run dev` (watchers + sibling deps are not set
+  up for interactive use here).
+- Use `./install.sh`: builds and rsyncs `dist-chrome/` into the directory
+  Chrome loads (`~/Downloads/sitegeist` by default; override via CLI arg or
+  `$SITEGEIST_INSTALL_DIR`). After it finishes, reload the extension in
+  `chrome://extensions/`.
+
+### Checks on this machine
+- `./check.sh` works after `npm install -D typescript` was added and
+  `cd site && npm install` was run. If it fails with `tsc: command not found`,
+  the node_modules were wiped — re-run `npm install` in the repo root.
+
+### Agent tools
+- Tools live in `src/tools/<name>.ts`: TypeBox schema + class implementing
+  `AgentTool` + a `ToolRenderer` registered via `registerToolRenderer`.
+- New tools must be mounted in the `toolsFactory` array in `src/sidepanel.ts`
+  and get their permission added to `static/manifest.chrome.json`.
+- `src/tools/bookmarks.ts` (operation-dispatch design) is the reference for
+  single-tool-multi-operation patterns; `navigate.ts`/`extract-image.ts` for
+  single-purpose tools.
+- Chrome API errors: wrap promise APIs so rejections become friendly Errors
+  (see `call()` in bookmarks.ts). Narrow `args.x` into a local `const` before
+  using it inside closures - property narrowing does not survive closures.
