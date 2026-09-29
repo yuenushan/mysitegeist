@@ -14,6 +14,7 @@ import {
 	ChatPanel,
 	createExtractDocumentTool,
 	createStreamFn,
+	type EditorSuggestion,
 	ModelSelector,
 	ProvidersModelsTab,
 	ProxyTab,
@@ -603,6 +604,28 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				},
 				providers,
 			);
+		},
+		suggestionProvider: async (_query: string): Promise<EditorSuggestion[]> => {
+			const items: EditorSuggestion[] = [
+				{
+					label: "/compact",
+					description: "Summarize older context to free up tokens; optionally add focus instructions",
+					insertText: "/compact ",
+				},
+			];
+			try {
+				const skills = await storage.skills.list();
+				for (const skill of skills) {
+					items.push({
+						label: skill.name,
+						description: skill.shortDescription || "Skill",
+						insertText: `Use the "${skill.name}" skill`,
+					});
+				}
+			} catch (err) {
+				console.error("Failed to list skills for suggestions:", err);
+			}
+			return items;
 		},
 		onBeforeSend: async (input: string) => {
 			if (!agent) return false;
