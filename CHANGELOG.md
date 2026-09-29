@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- Context compaction ported from pi 0.87.1: automatic compaction between turns when context usage exceeds the model's window minus a reserve, manual compaction via a context usage badge in the header, and a collapsible summary entry in the transcript
+- Compaction summaries re-enter the LLM context as a `<context-summary>` user message and support iterative updates across repeated compactions
+
 ## [1.0.0] - 2026-03-15
 
 ### Added

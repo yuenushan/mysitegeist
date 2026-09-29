@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
+import type { CompactionMessage } from "./CompactionMessage.js";
 import type { NavigationMessage } from "./NavigationMessage.js";
 
 // Helper: Check if a message has toolCall blocks
@@ -80,6 +81,17 @@ export async function browserMessageTransformer(messages: AgentMessage[]): Promi
 	for (const m of messages) {
 		// Filter out UI-only messages
 		if (m.role === "artifact" || m.role === "welcome") {
+			continue;
+		}
+
+		// Compaction summaries enter the LLM context as a user message
+		if (m.role === "compaction") {
+			const compaction = m as CompactionMessage;
+			transformed.push({
+				role: "user",
+				content: `<context-summary>\n${compaction.summary}\n</context-summary>\n\nThe earlier conversation was summarized above and removed from context. Treat this summary as the authoritative record of prior work and continue from it.`,
+				timestamp: compaction.timestamp,
+			} as Message);
 			continue;
 		}
 

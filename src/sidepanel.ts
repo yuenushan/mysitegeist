@@ -24,6 +24,16 @@ import {
 } from "@mariozechner/pi-web-ui";
 import { html, render } from "lit";
 import { History, Plus, Settings } from "lucide";
+import {
+	type CompactionSettings,
+	compact,
+	DEFAULT_COMPACTION_SETTINGS,
+	estimateContextTokens,
+	prepareCompaction,
+	shouldCompact,
+} from "./agent/compaction/compaction.js";
+import { createSummaryRequest } from "./agent/compaction/summarizer.js";
+import { Toast } from "./components/Toast.js";
 import { AboutTab } from "./dialogs/AboutTab.js";
 import { ApiKeyOrOAuthDialog } from "./dialogs/ApiKeyOrOAuthDialog.js";
 import { ApiKeysOAuthTab } from "./dialogs/ApiKeysOAuthTab.js";
@@ -34,6 +44,7 @@ import { SkillsTab } from "./dialogs/SkillsTab.js";
 import { UpdateNotificationDialog } from "./dialogs/UpdateNotificationDialog.js";
 import { UserScriptsPermissionDialog } from "./dialogs/UserScriptsPermissionDialog.js";
 import { WelcomeSetupDialog } from "./dialogs/WelcomeSetupDialog.js";
+import { createCompactionMessage, registerCompactionRenderer } from "./messages/CompactionMessage.js";
 import { browserMessageTransformer } from "./messages/message-transformer.js";
 import {
 	createNavigationMessage,
@@ -60,6 +71,7 @@ import { tutorials } from "./tutorials.js";
 
 // Register custom message renderers
 registerNavigationRenderer();
+registerCompactionRenderer();
 registerExtractImageRenderer();
 registerBookmarksRenderer();
 
@@ -107,6 +119,10 @@ const recordedCostMessages = new Set<AgentMessage>();
 
 // Cached auth type label for the current provider
 let authLabel = "";
+
+// Context compaction (ported from pi 0.87.1)
+const compactionSettings: CompactionSettings = { ...DEFAULT_COMPACTION_SETTINGS };
+let compacting = false;
 
 const DEFAULT_MODELS: Record<string, string> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
@@ -330,6 +346,88 @@ const saveSession = async () => {
 	}
 };
 
+// ============================================================================
+// CONTEXT COMPACTION
+// ============================================================================
+const formatTokenCount = (n: number): string => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+
+const getContextUsage = () => {
+	if (!agent) return null;
+	const contextWindow = agent.state.model.contextWindow;
+	if (!contextWindow || contextWindow <= 0) return null;
+	const { tokens } = estimateContextTokens(agent.state.messages);
+	return { used: tokens, contextWindow, percent: Math.round((tokens / contextWindow) * 100) };
+};
+
+const shouldAutoCompact = (): boolean => {
+	if (!agent || compacting || agent.state.isStreaming) return false;
+	const info = getContextUsage();
+	if (!info) return false;
+	return shouldCompact(info.used, info.contextWindow, compactionSettings);
+};
+
+const runCompaction = async (customInstructions?: string): Promise<boolean> => {
+	if (!agent || compacting || agent.state.isStreaming) return false;
+	const preparation = prepareCompaction(agent.state.messages, compactionSettings);
+	if (!preparation) return false;
+
+	compacting = true;
+	renderApp();
+	try {
+		const model = agent.state.model;
+		const request = createSummaryRequest(
+			{
+				getApiKey: async () => {
+					const stored = await storage.providerKeys.get(model.provider);
+					if (!stored) return undefined;
+					const proxyEnabled = await storage.settings.get<boolean>("proxy.enabled");
+					const proxyUrl = proxyEnabled
+						? (await storage.settings.get<string>("proxy.url")) || undefined
+						: undefined;
+					return resolveApiKey(stored, model.provider, storage.providerKeys, proxyUrl);
+				},
+				getProxyUrl: async () => {
+					const enabled = await storage.settings.get<boolean>("proxy.enabled");
+					return enabled ? (await storage.settings.get<string>("proxy.url")) || undefined : undefined;
+				},
+			},
+			{ model, thinkingLevel: agent.state.thinkingLevel },
+		);
+		const result = await compact(
+			preparation,
+			{
+				model,
+				thinkingLevel: agent.state.thinkingLevel,
+				customInstructions,
+				convertToLlm: browserMessageTransformer,
+			},
+			request,
+		);
+
+		const compactionMessage = createCompactionMessage(result.summary, result.tokensBefore, result.usage);
+		agent.replaceMessages([compactionMessage, ...result.retainedTail]);
+
+		if (currentSessionId) {
+			await saveSession();
+		}
+		chatPanel.agentInterface?.requestUpdate();
+		Toast.success(`Context compacted (~${formatTokenCount(result.tokensBefore)} tokens summarized)`);
+		return true;
+	} catch (err) {
+		console.error("Compaction failed:", err);
+		Toast.error(`Failed to compact context: ${(err as Error).message}`);
+		return false;
+	} finally {
+		compacting = false;
+		renderApp();
+	}
+};
+
+const maybeAutoCompact = async (): Promise<void> => {
+	if (!shouldAutoCompact()) return;
+	await runCompaction();
+};
+
 const updateUrl = (sessionId: string) => {
 	const url = new URL(window.location.href);
 	url.searchParams.set("session", sessionId);
@@ -459,6 +557,10 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				updateUrl(currentSessionId);
 			}
 
+			if (event.type === "agent_end") {
+				void maybeAutoCompact();
+			}
+
 			if (currentSessionId) {
 				saveSession();
 			}
@@ -492,6 +594,10 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			);
 		},
 		onBeforeSend: async () => {
+			if (!agent) return;
+
+			// Compact proactively before sending if the context is nearly full
+			await maybeAutoCompact();
 			if (!agent) return;
 
 			// Get current tab info
@@ -707,6 +813,24 @@ const renderApp = () => {
 					}
 				</div>
 				<div class="flex items-center gap-1 px-2">
+					${(() => {
+						const info = getContextUsage();
+						if (!info) return html``;
+						const cls =
+							info.percent >= 80
+								? "text-destructive border-destructive/40"
+								: info.percent >= 60
+									? "text-amber-500 border-amber-500/40"
+									: "text-muted-foreground border-border";
+						return html`<button
+							class="px-2 py-0.5 text-[10px] rounded-full border ${cls} hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+							disabled=${compacting}
+							@click=${() => void runCompaction()}
+							title="Context: ${info.used.toLocaleString()} / ${info.contextWindow.toLocaleString()} tokens (${info.percent}%). Click to compact now."
+						>
+							${compacting ? "compacting…" : `ctx ${info.percent}%`}
+						</button>`;
+					})()}
 					${agent ? html`<span class="text-[10px] text-muted-foreground truncate max-w-[120px]" title="${agent.state.model.provider}/${agent.state.model.id}${authLabel ? ` (${authLabel})` : ""}">${agent.state.model.provider}${authLabel ? html` <span class="text-[9px] opacity-70">${authLabel}</span>` : ""}</span>` : ""}
 					<theme-toggle></theme-toggle>
 					${Button({
