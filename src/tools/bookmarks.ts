@@ -202,7 +202,7 @@ export class BookmarksTool implements AgentTool<typeof bookmarksSchema, Bookmark
 		query: string | { title?: string; url?: string } | undefined,
 	): Promise<AgentToolResult<BookmarksDetails>> {
 		if (query === undefined) throw new Error("'query' is required for search operation");
-		const results = await call(() => chrome.bookmarks.search(query as chrome.bookmarks.BookmarkSearchQuery));
+		const results = await call(() => chrome.bookmarks.search(query as chrome.bookmarks.SearchQuery));
 		const nodes = results.map((node) => slimNode(node, 0, 0));
 
 		const details: BookmarksDetails = {
@@ -257,16 +257,17 @@ export class BookmarksTool implements AgentTool<typeof bookmarksSchema, Bookmark
 	}
 
 	private async move(args: BookmarksParams): Promise<AgentToolResult<BookmarksDetails>> {
-		if (args.id === undefined) throw new Error("'id' is required for move operation");
-		if (PROTECTED_IDS.has(args.id)) {
-			throw new Error(`Cannot move special folder with id "${args.id}" (root/Bookmarks Bar/Other Bookmarks)`);
+		const id = args.id;
+		if (id === undefined) throw new Error("'id' is required for move operation");
+		if (PROTECTED_IDS.has(id)) {
+			throw new Error(`Cannot move special folder with id "${id}" (root/Bookmarks Bar/Other Bookmarks)`);
 		}
 
-		const [node] = await call(() => chrome.bookmarks.get(args.id));
-		if (!node) throw new Error(`Bookmark node "${args.id}" not found`);
+		const [node] = await call(() => chrome.bookmarks.get(id));
+		if (!node) throw new Error(`Bookmark node "${id}" not found`);
 
 		const moved = await call(() =>
-			chrome.bookmarks.move(args.id, {
+			chrome.bookmarks.move(id, {
 				parentId: args.parentId,
 				index: args.index,
 			}),
