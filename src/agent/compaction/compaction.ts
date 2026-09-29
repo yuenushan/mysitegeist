@@ -432,6 +432,18 @@ export function prepareCompaction(
 		: [];
 	const retainedTail = compactable.slice(cutPoint.firstKeptIndex);
 
+	// A summarize set containing only UI-only messages (welcome, artifact)
+	// converts to an empty LLM conversation - the summary model would receive
+	// nothing and produce a hollow template. Treat as nothing to compact.
+	const hasLlmVisible = (list: AgentMessage[]): boolean =>
+		list.some((message) => {
+			const role = message.role;
+			return role === "user" || role === "assistant" || role === "toolResult" || role === "navigation";
+		});
+	if (!hasLlmVisible(messagesToSummarize) && !hasLlmVisible(turnPrefixMessages)) {
+		return null;
+	}
+
 	if (messagesToSummarize.length === 0 && turnPrefixMessages.length === 0) return null;
 
 	return {
@@ -501,6 +513,9 @@ async function summarizeMessages(
 ): Promise<{ text: string; usage?: Usage }> {
 	const llmMessages = await options.convertToLlm(messages);
 	const conversationText = serializeConversation(llmMessages);
+	if (conversationText.trim().length === 0) {
+		throw new Error("Nothing to summarize: the message set has no LLM-visible content");
+	}
 	let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
 	if (previousSummary !== undefined) {
 		promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;

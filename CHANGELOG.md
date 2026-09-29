@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- Manual compaction on a small session no longer produces a hollow all-(none) summary: sessions whose entire history fits the keep-recent budget, or whose compactable prefix contains only UI-only messages (welcome/artifact), are now rejected as nothing to compact; summarizeMessages additionally refuses to run on an empty LLM-visible conversation
 - Compaction summary messages now display at their chronological position (after the retained tail they summarize, before later turns) instead of at the top of the context list, where they ended up thousands of pixels above the viewport and appeared to be missing after compaction; LLM context order is unchanged
 
 ## [1.0.0] - 2026-03-15
