@@ -91,14 +91,32 @@ export function getChildren(tree: SessionTree, parentId: string | null): TreeEnt
 }
 
 /**
- * Jump the active leaf to any existing entry. The messages list along the new
- * path is the branch up to that point; sending the next message creates a new
- * branch under it (the abandoned branch stays in the tree).
+ * Jump the active leaf onto any existing entry (inclusive). The messages list
+ * along the new path is the branch up to that point.
  */
 export function jumpToEntry(tree: SessionTree, entryId: string): SessionTree {
 	const entry = tree.entries.find((candidate) => candidate.id === entryId);
 	if (!entry) {
 		throw new Error(`Unknown session tree entry: ${entryId}`);
+	}
+	return { entries: tree.entries, activeLeafId: entry.id };
+}
+
+/**
+ * Jump to a jump-point target with role semantics:
+ * - user message: rewind to just BEFORE it (exclusive), so the next typed
+ *   message starts a new branch instead of dangling after an unanswered
+ *   question
+ * - every other entry (assistant answer, navigation, compaction): rewind
+ *   onto it (inclusive), continuing from that point
+ */
+export function jumpToPoint(tree: SessionTree, entryId: string): SessionTree {
+	const entry = tree.entries.find((candidate) => candidate.id === entryId);
+	if (!entry) {
+		throw new Error(`Unknown session tree entry: ${entryId}`);
+	}
+	if (entry.message.role === "user") {
+		return { entries: tree.entries, activeLeafId: entry.parentId };
 	}
 	return { entries: tree.entries, activeLeafId: entry.id };
 }
@@ -121,7 +139,16 @@ export function listJumpPoints(tree: SessionTree): TreeJumpPoint[] {
 	const points: TreeJumpPoint[] = [];
 	for (const entry of tree.entries) {
 		const role = entry.message.role;
-		if (role !== "user" && role !== "navigation" && role !== "compaction") {
+		// Assistant entries qualify only when they carry no pending tool calls:
+		// a leaf ending in an unanswered tool call is not a valid continuation point
+		if (role === "assistant") {
+			const hasToolCalls = (entry.message as { content?: Array<{ type: string }> }).content?.some(
+				(block) => block.type === "toolCall",
+			);
+			if (hasToolCalls) {
+				continue;
+			}
+		} else if (role !== "user" && role !== "navigation" && role !== "compaction") {
 			continue;
 		}
 		// Fork ancestors: how many ancestors have more than one child
@@ -132,11 +159,11 @@ export function listJumpPoints(tree: SessionTree): TreeJumpPoint[] {
 				depth++;
 			}
 		}
-		const siblings = getChildren(tree, entry.id);
+		const onwardBranches = getChildren(tree, entry.id);
 		points.push({
 			entry,
 			depth,
-			branchCount: siblings.length,
+			branchCount: onwardBranches.length,
 		});
 	}
 	return points;

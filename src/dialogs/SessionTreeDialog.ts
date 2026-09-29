@@ -44,16 +44,23 @@ export class SessionTreeDialog extends DialogBase {
 	@state() private activePathIds = new Set<string>();
 
 	private onJumpCallback?: (entryId: string) => void;
+	private onResendCallback?: (entryId: string) => void;
 
 	protected modalWidth = "min(600px, 90vw)";
 	protected modalHeight = "min(700px, 90vh)";
 
-	static open(tree: SessionTree, activeLeafId: string | null, onJump: (entryId: string) => void) {
+	static open(
+		tree: SessionTree,
+		activeLeafId: string | null,
+		onJump: (entryId: string) => void,
+		onResend?: (entryId: string) => void,
+	) {
 		const dialog = new SessionTreeDialog();
 		dialog.tree = tree;
 		dialog.activeLeafId = activeLeafId;
 		dialog.activePathIds = new Set(pathToRoot(tree, activeLeafId).map((entry) => entry.id));
 		dialog.onJumpCallback = onJump;
+		dialog.onResendCallback = onResend;
 		dialog.open();
 	}
 
@@ -64,10 +71,19 @@ export class SessionTreeDialog extends DialogBase {
 		this.close();
 	}
 
+	private handleResend(entryId: string) {
+		if (this.onResendCallback) {
+			this.onResendCallback(entryId);
+		}
+		this.close();
+	}
+
 	private roleLabel(role: string): string {
 		switch (role) {
 			case "user":
 				return i18n("You");
+			case "assistant":
+				return i18n("Assistant");
 			case "navigation":
 				return i18n("Navigation");
 			case "compaction":
@@ -152,6 +168,20 @@ export class SessionTreeDialog extends DialogBase {
 						${previewOf(entry.message)}
 					</div>
 				</div>
+				${
+					entry.message.role === "user" && this.onResendCallback
+						? html`<button
+								class="shrink-0 px-2 py-1 text-[10px] rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+								@click=${(e: Event) => {
+									e.stopPropagation();
+									this.handleResend(entry.id);
+								}}
+								title=${i18n("Re-send this message as a new branch")}
+							>
+								${i18n("Re-send")}
+							</button>`
+						: ""
+				}
 			</div>
 		`;
 	}

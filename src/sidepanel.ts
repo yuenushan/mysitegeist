@@ -36,7 +36,7 @@ import {
 import { createSummaryRequest } from "./agent/compaction/summarizer.js";
 import {
 	createSessionTree,
-	jumpToEntry,
+	jumpToPoint,
 	messagesAlongPath,
 	migrateMessagesToTree,
 	reconcileTree,
@@ -464,8 +464,8 @@ const jumpToTreeEntry = (entryId: string): boolean => {
 		return false;
 	}
 	try {
-		currentTree = jumpToEntry(currentTree, entryId);
-		agent.replaceMessages(messagesAlongPath(currentTree, entryId));
+		currentTree = jumpToPoint(currentTree, entryId);
+		agent.replaceMessages(messagesAlongPath(currentTree, currentTree.activeLeafId));
 		chatPanel.agentInterface?.requestUpdate();
 		if (currentSessionId) {
 			void saveSession();
@@ -476,6 +476,34 @@ const jumpToTreeEntry = (entryId: string): boolean => {
 		Toast.error(`Failed to jump: ${(err as Error).message}`);
 		return false;
 	}
+};
+
+const resendFromEntry = (entryId: string): boolean => {
+	if (!agent) return false;
+	if (agent.state.isStreaming) {
+		Toast.error("Wait for the current response to finish");
+		return false;
+	}
+	if (compacting) {
+		Toast.error("Compaction in progress");
+		return false;
+	}
+	const entry = currentTree.entries.find((candidate) => candidate.id === entryId);
+	if (!entry || entry.message.role !== "user") return false;
+
+	// Rewind to before the message, then re-prompt the SAME message object so
+	// reconcile records the rerun as a new branch without duplicating it
+	currentTree = jumpToPoint(currentTree, entryId);
+	agent.replaceMessages(messagesAlongPath(currentTree, currentTree.activeLeafId));
+	chatPanel.agentInterface?.requestUpdate();
+	if (currentSessionId) {
+		void saveSession();
+	}
+	agent.prompt(entry.message).catch((err: unknown) => {
+		console.error("Failed to re-send message:", err);
+		Toast.error(`Failed to re-send: ${(err as Error).message}`);
+	});
+	return true;
 };
 
 const updateUrl = (sessionId: string) => {
@@ -843,7 +871,7 @@ const renderApp = () => {
 						size: "sm",
 						children: icon(GitFork, "sm"),
 						onClick: () => {
-							SessionTreeDialog.open(currentTree, currentTree.activeLeafId, jumpToTreeEntry);
+							SessionTreeDialog.open(currentTree, currentTree.activeLeafId, jumpToTreeEntry, resendFromEntry);
 						},
 						title: "Session branches",
 					})}

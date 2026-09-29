@@ -20,6 +20,9 @@ declare module "@mariozechner/mini-lit" {
 		"Jump to a previous point; the next message starts a new branch there": string;
 		"No branch points yet": string;
 		You: string;
+		Assistant: string;
+		"Re-send": string;
+		"Re-send this message as a new branch": string;
 		Navigation: string;
 		Compaction: string;
 		"Continue from here": string;
@@ -200,6 +203,9 @@ const sitegeistTranslations = {
 			"Jump to a previous point; the next message starts a new branch there",
 		"No branch points yet": "No branch points yet",
 		You: "You",
+		Assistant: "Assistant",
+		"Re-send": "Re-send",
+		"Re-send this message as a new branch": "Re-send this message as a new branch",
 		Navigation: "Navigation",
 		Compaction: "Compaction",
 		"Continue from here": "Continue from here",
@@ -301,6 +307,9 @@ const sitegeistTranslations = {
 			"Zu einem früheren Punkt springen; die nächste Nachricht startet dort einen neuen Zweig",
 		"No branch points yet": "Noch keine Verzweigungspunkte",
 		You: "Du",
+		Assistant: "Assistent",
+		"Re-send": "Erneut senden",
+		"Re-send this message as a new branch": "Diese Nachricht als neuen Zweig erneut senden",
 		Navigation: "Navigation",
 		Compaction: "Kompaktierung",
 		"Continue from here": "Hier fortsetzen",
