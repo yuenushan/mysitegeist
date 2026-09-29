@@ -24,7 +24,7 @@ import {
 	setShowJsonMode,
 } from "@mariozechner/pi-web-ui";
 import { html, render } from "lit";
-import { History, Plus, Settings } from "lucide";
+import { GitFork, History, Plus, Settings } from "lucide";
 import {
 	type CompactionSettings,
 	compact,
@@ -36,6 +36,8 @@ import {
 import { createSummaryRequest } from "./agent/compaction/summarizer.js";
 import {
 	createSessionTree,
+	jumpToEntry,
+	messagesAlongPath,
 	migrateMessagesToTree,
 	reconcileTree,
 	type SessionTree,
@@ -47,6 +49,7 @@ import { ApiKeysOAuthTab } from "./dialogs/ApiKeysOAuthTab.js";
 import { CostsTab } from "./dialogs/CostsTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
+import { SessionTreeDialog } from "./dialogs/SessionTreeDialog.js";
 import { SkillsTab } from "./dialogs/SkillsTab.js";
 import { UpdateNotificationDialog } from "./dialogs/UpdateNotificationDialog.js";
 import { UserScriptsPermissionDialog } from "./dialogs/UserScriptsPermissionDialog.js";
@@ -450,6 +453,31 @@ const maybeAutoCompact = async (): Promise<void> => {
 	await runCompaction(undefined, "auto");
 };
 
+const jumpToTreeEntry = (entryId: string): boolean => {
+	if (!agent) return false;
+	if (agent.state.isStreaming) {
+		Toast.error("Wait for the current response to finish");
+		return false;
+	}
+	if (compacting) {
+		Toast.error("Compaction in progress");
+		return false;
+	}
+	try {
+		currentTree = jumpToEntry(currentTree, entryId);
+		agent.replaceMessages(messagesAlongPath(currentTree, entryId));
+		chatPanel.agentInterface?.requestUpdate();
+		if (currentSessionId) {
+			void saveSession();
+		}
+		return true;
+	} catch (err) {
+		console.error("Failed to jump to tree entry:", err);
+		Toast.error(`Failed to jump: ${(err as Error).message}`);
+		return false;
+	}
+};
+
 const updateUrl = (sessionId: string) => {
 	const url = new URL(window.location.href);
 	url.searchParams.set("session", sessionId);
@@ -809,6 +837,15 @@ const renderApp = () => {
 							);
 						},
 						title: "Sessions",
+					})}
+					${Button({
+						variant: "ghost",
+						size: "sm",
+						children: icon(GitFork, "sm"),
+						onClick: () => {
+							SessionTreeDialog.open(currentTree, currentTree.activeLeafId, jumpToTreeEntry);
+						},
+						title: "Session branches",
 					})}
 					${Button({
 						variant: "ghost",

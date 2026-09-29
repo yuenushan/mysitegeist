@@ -15,6 +15,17 @@ declare module "@mariozechner/mini-lit" {
 		Delete: string;
 		"Loading...": string;
 
+		// Session tree dialog
+		"Session branches": string;
+		"Jump to a previous point; the next message starts a new branch there": string;
+		"No branch points yet": string;
+		You: string;
+		Navigation: string;
+		Compaction: string;
+		"Continue from here": string;
+		"Branch position among siblings": string;
+		branch: string;
+
 		// Sitegeist extension keys
 		"Permission request failed": string;
 		"JavaScript Execution Permission Required": string;
@@ -184,6 +195,16 @@ const sitegeistTranslations = {
 		"A new version ({version}) is available. Please update to continue.":
 			"A new version ({version}) is available. Please update to continue.",
 		"Update Now": "Update Now",
+		"Session branches": "Session branches",
+		"Jump to a previous point; the next message starts a new branch there":
+			"Jump to a previous point; the next message starts a new branch there",
+		"No branch points yet": "No branch points yet",
+		You: "You",
+		Navigation: "Navigation",
+		Compaction: "Compaction",
+		"Continue from here": "Continue from here",
+		"Branch position among siblings": "Branch position among siblings",
+		branch: "branch",
 	},
 	de: {
 		"Permission request failed": "Berechtigungsanfrage fehlgeschlagen",
@@ -275,6 +296,16 @@ const sitegeistTranslations = {
 		"A new version ({version}) is available. Please update to continue.":
 			"Eine neue Version ({version}) ist verfügbar. Bitte aktualisieren Sie, um fortzufahren.",
 		"Update Now": "Jetzt aktualisieren",
+		"Session branches": "Sitzungs-Zweige",
+		"Jump to a previous point; the next message starts a new branch there":
+			"Zu einem früheren Punkt springen; die nächste Nachricht startet dort einen neuen Zweig",
+		"No branch points yet": "Noch keine Verzweigungspunkte",
+		You: "Du",
+		Navigation: "Navigation",
+		Compaction: "Kompaktierung",
+		"Continue from here": "Hier fortsetzen",
+		"Branch position among siblings": "Position des Zweigs unter Geschwistern",
+		branch: "Zweig",
 	},
 };
 

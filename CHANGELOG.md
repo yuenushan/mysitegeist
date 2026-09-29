@@ -4,6 +4,7 @@
 
 ### Added
 
+- Session branch tree: messages persist as a tree (id/parentId + active leaf), legacy flat sessions migrate on load; branch/rollback view in the header opens a jump-point list where selecting a point rewinds the conversation and the next message forks a new branch (abandoned branches are kept and marked)
 - Slash-command suggestion menu in the chat input: typing "/" lists the /compact command and available skills with descriptions, filterable while typing, keyboard navigable (arrows, Enter/Tab to select, Escape to close); requires the web-ui snapshot rebuild adding a generic suggestionProvider to MessageEditor/AgentInterface/ChatPanel
 - Context compaction ported from pi 0.87.1: automatic compaction between turns when context usage exceeds the model's window minus a reserve, manual compaction via a context usage badge in the header, and a collapsible summary entry in the transcript
 - Compaction summaries re-enter the LLM context as a `<context-summary>` user message and support iterative updates across repeated compactions
