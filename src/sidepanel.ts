@@ -15,6 +15,7 @@ import {
 	createExtractDocumentTool,
 	createStreamFn,
 	ModelSelector,
+	ProvidersModelsTab,
 	ProxyTab,
 	SettingsDialog,
 	// PersistentStorageDialog,
@@ -44,6 +45,7 @@ import { createWelcomeMessage, registerWelcomeRenderer } from "./messages/Welcom
 import { isOAuthCredentials, resolveApiKey } from "./oauth/index.js";
 import { SYSTEM_PROMPT } from "./prompts/prompts.js";
 import { SitegeistAppStorage } from "./storage/app-storage.js";
+import { BookmarksTool, registerBookmarksRenderer } from "./tools/bookmarks.js";
 import { DebuggerTool } from "./tools/debugger.js";
 import { ExtractImageTool, registerExtractImageRenderer } from "./tools/extract-image.js";
 import { AskUserWhichElementTool, skillTool } from "./tools/index.js";
@@ -59,6 +61,7 @@ import { tutorials } from "./tutorials.js";
 // Register custom message renderers
 registerNavigationRenderer();
 registerExtractImageRenderer();
+registerBookmarksRenderer();
 
 // Listen for abort messages from REPL overlay
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -181,7 +184,14 @@ async function hasAnyApiKey(): Promise<boolean> {
 function openApiKeysDialog(): Promise<void> {
 	return new Promise((resolve) => {
 		SettingsDialog.open(
-			[new ApiKeysOAuthTab(), new CostsTab(), new SkillsTab(), new ProxyTab(), new AboutTab()],
+			[
+				new ProvidersModelsTab(),
+				new ApiKeysOAuthTab(),
+				new CostsTab(),
+				new SkillsTab(),
+				new ProxyTab(),
+				new AboutTab(),
+			],
 			resolve,
 		);
 	});
@@ -546,6 +556,8 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			const extractImageTool = new ExtractImageTool();
 			extractImageTool.windowId = currentWindowId;
 
+			const bookmarksTool = new BookmarksTool();
+
 			const tools: AgentTool<any, any>[] = [
 				navigateTool,
 				selectElementTool,
@@ -553,6 +565,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				skillTool,
 				extractDocumentTool,
 				extractImageTool,
+				bookmarksTool,
 			];
 
 			// Conditionally add debugger tool if enabled
@@ -702,6 +715,7 @@ const renderApp = () => {
 						children: icon(Settings, "sm"),
 						onClick: () =>
 							SettingsDialog.open([
+								new ProvidersModelsTab(),
 								new ApiKeysOAuthTab(),
 								new CostsTab(),
 								new SkillsTab(),
