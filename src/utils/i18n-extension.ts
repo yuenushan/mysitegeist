@@ -23,8 +23,8 @@ declare module "@mariozechner/mini-lit" {
 		Navigation: string;
 		Compaction: string;
 		"Continue from here": string;
-		"Branch position among siblings": string;
-		branch: string;
+		"Onward branches at this point": string;
+		branches: string;
 
 		// Sitegeist extension keys
 		"Permission request failed": string;
@@ -203,8 +203,8 @@ const sitegeistTranslations = {
 		Navigation: "Navigation",
 		Compaction: "Compaction",
 		"Continue from here": "Continue from here",
-		"Branch position among siblings": "Branch position among siblings",
-		branch: "branch",
+		"Onward branches at this point": "Onward branches at this point",
+		branches: "branches",
 	},
 	de: {
 		"Permission request failed": "Berechtigungsanfrage fehlgeschlagen",
@@ -304,8 +304,8 @@ const sitegeistTranslations = {
 		Navigation: "Navigation",
 		Compaction: "Kompaktierung",
 		"Continue from here": "Hier fortsetzen",
-		"Branch position among siblings": "Position des Zweigs unter Geschwistern",
-		branch: "Zweig",
+		"Onward branches at this point": "Verzweigungen ab diesem Punkt",
+		branches: "Verzweigungen",
 	},
 };
 

@@ -105,40 +105,37 @@ export function jumpToEntry(tree: SessionTree, entryId: string): SessionTree {
 
 /**
  * UI jump points: user-facing boundaries — user, navigation, and compaction
- * messages — annotated with their branch position among siblings.
+ * messages. `branchCount` is the number of onward branches at the point
+ * (>1 marks a fork); `depth` counts fork-point ancestors, so linear chains
+ * stay flush while branched sections indent.
  */
 export interface TreeJumpPoint {
 	entry: TreeEntry;
+	/** Number of ancestors that are fork points (>1 children). */
 	depth: number;
-	branchIndex: number;
+	/** Number of onward branches at this point. */
 	branchCount: number;
 }
 
 export function listJumpPoints(tree: SessionTree): TreeJumpPoint[] {
-	const byId = new Map(tree.entries.map((entry) => [entry.id, entry]));
-	const depthById = new Map<string, number>();
 	const points: TreeJumpPoint[] = [];
 	for (const entry of tree.entries) {
 		const role = entry.message.role;
 		if (role !== "user" && role !== "navigation" && role !== "compaction") {
 			continue;
 		}
-		let depth: number;
-		if (entry.parentId === null) {
-			depth = 0;
-		} else {
-			const parentDepth = depthById.get(entry.parentId);
-			if (parentDepth === undefined) {
-				continue; // parent is not a jump point; depth unknown until seen
+		// Fork ancestors: how many ancestors have more than one child
+		const ancestors = pathToRoot(tree, entry.id);
+		let depth = 0;
+		for (const ancestor of ancestors) {
+			if (ancestor.id !== entry.id && getChildren(tree, ancestor.id).length > 1) {
+				depth++;
 			}
-			depth = parentDepth + 1;
 		}
-		depthById.set(entry.id, depth);
-		const siblings = getChildren(tree, entry.parentId);
+		const siblings = getChildren(tree, entry.id);
 		points.push({
 			entry,
 			depth,
-			branchIndex: siblings.findIndex((sibling) => sibling.id === entry.id),
 			branchCount: siblings.length,
 		});
 	}

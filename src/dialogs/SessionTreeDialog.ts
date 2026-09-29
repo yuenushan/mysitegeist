@@ -141,9 +141,9 @@ export class SessionTreeDialog extends DialogBase {
 							isFork
 								? html`<span
 										class="px-1.5 py-0.5 text-[10px] rounded-full bg-muted text-muted-foreground font-medium"
-										title=${i18n("Branch position among siblings")}
+										title=${i18n("Onward branches at this point")}
 									>
-										${i18n("branch")} ${point.branchIndex + 1}/${point.branchCount}
+										${point.branchCount} ${i18n("branches")}
 									</span>`
 								: ""
 						}
