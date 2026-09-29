@@ -1,6 +1,7 @@
 import { icon } from "@mariozechner/mini-lit";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { Input } from "@mariozechner/mini-lit/dist/Input.js";
+import i18n from "@mariozechner/mini-lit/dist/i18n.js";
 import "@mariozechner/mini-lit/dist/ThemeToggle.js";
 import {
 	Agent,
@@ -379,6 +380,57 @@ const shouldAutoCompact = (): boolean => {
 	return shouldCompact(info.used, info.contextWindow, compactionSettings);
 };
 
+// Live compaction preview: rendered as a transient block at the end of the
+// message list (like pi's compaction status, but with the streaming summary
+// text visible). Cleared once the real compaction message replaces it.
+const COMPACTION_PREVIEW_MAX_CHARS = 2400;
+let compactionPreviewText = "";
+let compactionPreviewLastUpdate = 0;
+
+const clearCompactionPreview = () => {
+	compactionPreviewText = "";
+	if (chatPanel?.agentInterface) {
+		chatPanel.agentInterface.transientContent = null;
+		chatPanel.agentInterface.requestUpdate();
+	}
+};
+
+const renderCompactionPreview = () => {
+	const agentInterface = chatPanel?.agentInterface;
+	if (!agentInterface) return;
+	const preview = compactionPreviewText.slice(-COMPACTION_PREVIEW_MAX_CHARS);
+	agentInterface.transientContent = html`
+		<div class="mx-4 my-2 border border-border rounded-lg bg-card/50 px-3 py-2">
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<svg
+					class="animate-spin h-3 w-3 shrink-0"
+					viewBox="0 0 24 24"
+					fill="none"
+					xmlns="http://www.w3.org/2000/svg"
+				>
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+					></path>
+				</svg>
+				${i18n("Compacting context...")}
+			</div>
+			${
+				preview
+					? html`<div
+							class="mt-2 pt-2 border-t border-border text-xs text-muted-foreground whitespace-pre-wrap break-words max-h-48 overflow-y-auto"
+						>
+							${preview}
+						</div>`
+					: ""
+			}
+		</div>
+	`;
+	agentInterface.requestUpdate();
+};
+
 const runCompaction = async (customInstructions?: string, source: "manual" | "auto" = "auto"): Promise<boolean> => {
 	if (!agent) return false;
 	if (compacting) {
@@ -396,6 +448,8 @@ const runCompaction = async (customInstructions?: string, source: "manual" | "au
 	}
 
 	compacting = true;
+	compactionPreviewText = "";
+	renderCompactionPreview();
 	renderApp();
 	try {
 		const model = agent.state.model;
@@ -424,10 +478,18 @@ const runCompaction = async (customInstructions?: string, source: "manual" | "au
 				thinkingLevel: agent.state.thinkingLevel,
 				customInstructions,
 				convertToLlm: browserMessageTransformer,
+				onSummaryDelta: (text: string) => {
+					compactionPreviewText = text;
+					const now = performance.now();
+					if (now - compactionPreviewLastUpdate < 100) return;
+					compactionPreviewLastUpdate = now;
+					renderCompactionPreview();
+				},
 			},
 			request,
 		);
 
+		clearCompactionPreview();
 		const compactionMessage = createCompactionMessage(result.summary, result.tokensBefore, result.usage);
 		agent.replaceMessages([compactionMessage, ...result.retainedTail]);
 		currentTree = reconcileTree(currentTree, agent.state.messages);
@@ -439,6 +501,7 @@ const runCompaction = async (customInstructions?: string, source: "manual" | "au
 		Toast.success(`Context compacted (~${formatTokenCount(result.tokensBefore)} tokens summarized)`);
 		return true;
 	} catch (err) {
+		clearCompactionPreview();
 		console.error("Compaction failed:", err);
 		Toast.error(`Failed to compact context: ${(err as Error).message}`);
 		return false;

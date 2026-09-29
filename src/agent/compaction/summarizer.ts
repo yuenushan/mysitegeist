@@ -31,7 +31,7 @@ function sleep(ms: number): Promise<void> {
 export function createSummaryRequest(deps: SummaryRequestDeps, options: SummaryRequestOptions): SummaryRequest {
 	const { model, thinkingLevel, signal } = options;
 
-	return async ({ systemPrompt, messages, maxTokens }) => {
+	return async ({ systemPrompt, messages, maxTokens, onDelta }) => {
 		const [apiKey, proxyUrl] = await Promise.all([deps.getApiKey(), deps.getProxyUrl()]);
 		const streamFn = createStreamFn(() => Promise.resolve(proxyUrl));
 
@@ -41,18 +41,24 @@ export function createSummaryRequest(deps: SummaryRequestDeps, options: SummaryR
 				await sleep(RETRY_DELAYS_MS[attempt - 1]);
 			}
 			try {
-				const response = await (
-					await streamFn(
-						model,
-						{ systemPrompt, messages },
-						{
-							apiKey,
-							maxTokens,
-							signal,
-							reasoning: thinkingLevel === "off" ? undefined : thinkingLevel,
-						},
-					)
-				).result();
+				const stream = await streamFn(
+					model,
+					{ systemPrompt, messages },
+					{
+						apiKey,
+						maxTokens,
+						signal,
+						reasoning: thinkingLevel === "off" ? undefined : thinkingLevel,
+					},
+				);
+				let text = "";
+				for await (const event of stream) {
+					if (event.type === "text_delta") {
+						text += event.delta;
+						onDelta?.(text);
+					}
+				}
+				const response = await stream.result();
 				return {
 					text: response.content
 						.filter((block) => block.type === "text")

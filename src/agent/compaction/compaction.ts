@@ -453,6 +453,8 @@ export interface SummaryRequestInput {
 	systemPrompt: string;
 	messages: Message[];
 	maxTokens: number;
+	/** Streaming progress: receives the cumulative summary text so far (reset per retry attempt). */
+	onDelta?: (text: string) => void;
 }
 
 export interface SummaryRequestResult {
@@ -472,6 +474,8 @@ export interface CompactionOptions {
 	customInstructions?: string;
 	/** LLM-shaped message conversion (sitegeist's browserMessageTransformer). */
 	convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
+	/** Live summary preview for the UI; receives cumulative text across all summarization steps. */
+	onSummaryDelta?: (text: string) => void;
 }
 
 export interface CompactionResult {
@@ -493,6 +497,7 @@ async function summarizeMessages(
 	options: CompactionOptions,
 	maxTokens: number,
 	request: SummaryRequest,
+	onDelta?: (text: string) => void,
 ): Promise<{ text: string; usage?: Usage }> {
 	const llmMessages = await options.convertToLlm(messages);
 	const conversationText = serializeConversation(llmMessages);
@@ -512,6 +517,7 @@ async function summarizeMessages(
 			},
 		],
 		maxTokens,
+		onDelta,
 	});
 
 	if (response.stopReason === "aborted") {
@@ -543,6 +549,16 @@ export async function compact(
 		? `${SUMMARIZATION_PROMPT}\n\nAdditional focus: ${options.customInstructions}`
 		: SUMMARIZATION_PROMPT;
 
+	// Stitch streamed previews across summarization steps so the live text
+	// matches the final summary shape (history + separator + turn prefix)
+	let streamedBase = "";
+	const makeOnDelta = () =>
+		options.onSummaryDelta
+			? (text: string) => {
+					options.onSummaryDelta!(`${streamedBase}${text}`);
+				}
+			: undefined;
+
 	if (isSplitTurn && turnPrefixMessages.length > 0) {
 		let historyText = "No prior history.";
 		let historyUsage: Usage | undefined;
@@ -554,10 +570,12 @@ export async function compact(
 				options,
 				resolveMaxTokens(settings.reserveTokens, model, 0.8),
 				request,
+				makeOnDelta(),
 			);
 			historyText = history.text;
 			historyUsage = history.usage;
 		}
+		streamedBase = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n`;
 		const turnPrefix = await summarizeMessages(
 			turnPrefixMessages,
 			TURN_PREFIX_SUMMARIZATION_PROMPT,
@@ -565,6 +583,7 @@ export async function compact(
 			options,
 			resolveMaxTokens(settings.reserveTokens, model, 0.5),
 			request,
+			makeOnDelta(),
 		);
 		const summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefix.text}`;
 		return { summary, tokensBefore, usage: turnPrefix.usage ?? historyUsage, retainedTail };
@@ -577,6 +596,7 @@ export async function compact(
 		options,
 		resolveMaxTokens(settings.reserveTokens, model, 0.8),
 		request,
+		makeOnDelta(),
 	);
 	return { summary: result.text, tokensBefore, usage: result.usage, retainedTail };
 }

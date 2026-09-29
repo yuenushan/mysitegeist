@@ -16,6 +16,7 @@ declare module "@mariozechner/mini-lit" {
 		"Loading...": string;
 
 		// Session tree dialog
+		"Compacting context...": string;
 		"Session branches": string;
 		"Jump to a previous point; the next message starts a new branch there": string;
 		"No branch points yet": string;
@@ -198,6 +199,7 @@ const sitegeistTranslations = {
 		"A new version ({version}) is available. Please update to continue.":
 			"A new version ({version}) is available. Please update to continue.",
 		"Update Now": "Update Now",
+		"Compacting context...": "Compacting context...",
 		"Session branches": "Session branches",
 		"Jump to a previous point; the next message starts a new branch there":
 			"Jump to a previous point; the next message starts a new branch there",
@@ -302,6 +304,7 @@ const sitegeistTranslations = {
 		"A new version ({version}) is available. Please update to continue.":
 			"Eine neue Version ({version}) ist verfügbar. Bitte aktualisieren Sie, um fortzufahren.",
 		"Update Now": "Jetzt aktualisieren",
+		"Compacting context...": "Kontext wird komprimiert ...",
 		"Session branches": "Sitzungs-Zweige",
 		"Jump to a previous point; the next message starts a new branch there":
 			"Zu einem früheren Punkt springen; die nächste Nachricht startet dort einen neuen Zweig",
