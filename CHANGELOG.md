@@ -8,6 +8,11 @@
 - Slash-command suggestion menu in the chat input: typing "/" lists the /compact command and available skills with descriptions, filterable while typing, keyboard navigable (arrows, Enter/Tab to select, Escape to close); requires the web-ui snapshot rebuild adding a generic suggestionProvider to MessageEditor/AgentInterface/ChatPanel
 - Context compaction ported from pi 0.87.1: automatic compaction between turns when context usage exceeds the model's window minus a reserve, manual compaction via a context usage badge in the header, and a collapsible summary entry in the transcript
 - Compaction summaries re-enter the LLM context as a `<context-summary>` user message and support iterative updates across repeated compactions
+- Live compaction preview: while a compaction runs, a status card with the streaming summary text appears at the end of the chat flow (AgentInterface gains a host-owned transientContent slot; SummaryRequest streams cumulative text via onDelta)
+
+### Fixed
+
+- Compaction summary messages now display at their chronological position (after the retained tail they summarize, before later turns) instead of at the top of the context list, where they ended up thousands of pixels above the viewport and appeared to be missing after compaction; LLM context order is unchanged
 
 ## [1.0.0] - 2026-03-15
 
