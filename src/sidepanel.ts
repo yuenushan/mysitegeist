@@ -366,10 +366,21 @@ const shouldAutoCompact = (): boolean => {
 	return shouldCompact(info.used, info.contextWindow, compactionSettings);
 };
 
-const runCompaction = async (customInstructions?: string): Promise<boolean> => {
-	if (!agent || compacting || agent.state.isStreaming) return false;
+const runCompaction = async (customInstructions?: string, source: "manual" | "auto" = "auto"): Promise<boolean> => {
+	if (!agent) return false;
+	if (compacting) {
+		if (source === "manual") Toast.error("Compaction already in progress");
+		return false;
+	}
+	if (agent.state.isStreaming) {
+		if (source === "manual") Toast.error("Wait for the current response to finish");
+		return false;
+	}
 	const preparation = prepareCompaction(agent.state.messages, compactionSettings);
-	if (!preparation) return false;
+	if (!preparation) {
+		if (source === "manual") Toast.error("Nothing to compact yet - the context is too short");
+		return false;
+	}
 
 	compacting = true;
 	renderApp();
@@ -425,7 +436,7 @@ const runCompaction = async (customInstructions?: string): Promise<boolean> => {
 
 const maybeAutoCompact = async (): Promise<void> => {
 	if (!shouldAutoCompact()) return;
-	await runCompaction();
+	await runCompaction(undefined, "auto");
 };
 
 const updateUrl = (sessionId: string) => {
@@ -823,9 +834,9 @@ const renderApp = () => {
 									? "text-amber-500 border-amber-500/40"
 									: "text-muted-foreground border-border";
 						return html`<button
-							class="px-2 py-0.5 text-[10px] rounded-full border ${cls} hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+							class="px-2 py-0.5 text-[10px] rounded-full border ${cls} cursor-pointer hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 							disabled=${compacting}
-							@click=${() => void runCompaction()}
+							@click=${() => void runCompaction(undefined, "manual")}
 							title="Context: ${info.used.toLocaleString()} / ${info.contextWindow.toLocaleString()} tokens (${info.percent}%). Click to compact now."
 						>
 							${compacting ? "compacting…" : `ctx ${info.percent}%`}
