@@ -604,19 +604,27 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				providers,
 			);
 		},
-		onBeforeSend: async () => {
-			if (!agent) return;
+		onBeforeSend: async (input: string) => {
+			if (!agent) return false;
+
+			const trimmed = input.trim();
+			if (trimmed.startsWith("/compact")) {
+				const instructions = trimmed.slice("/compact".length).trim();
+				await runCompaction(instructions || undefined, "manual");
+				return true; // handled: cancel send, clear editor
+			}
 
 			// Compact proactively before sending if the context is nearly full
 			await maybeAutoCompact();
-			if (!agent) return;
+			if (!agent) return false;
 
 			// Get current tab info
 			const [tab] = await chrome.tabs.query({
 				active: true,
 				currentWindow: true,
 			});
-			if (!tab?.url || tab.url.startsWith("chrome-extension://") || tab.url.startsWith("moz-extension://")) return;
+			if (!tab?.url || tab.url.startsWith("chrome-extension://") || tab.url.startsWith("moz-extension://"))
+				return false;
 
 			// Find most recent navigation (either nav message or nav tool result)
 			let lastUrl: string | undefined;
@@ -835,7 +843,7 @@ const renderApp = () => {
 									: "text-muted-foreground border-border";
 						return html`<button
 							class="px-2 py-0.5 text-[10px] rounded-full border ${cls} cursor-pointer hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-							disabled=${compacting}
+							?disabled=${compacting}
 							@click=${() => void runCompaction(undefined, "manual")}
 							title="Context: ${info.used.toLocaleString()} / ${info.contextWindow.toLocaleString()} tokens (${info.percent}%). Click to compact now."
 						>
