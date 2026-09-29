@@ -113,6 +113,35 @@ when merging upstream changes.
   `cd site && npm install` was run. If it fails with `tsc: command not found`,
   the node_modules were wiped — re-run `npm install` in the repo root.
 
+### Self-testing before handing off (REQUIRED)
+After finishing a change, run everything that can run before asking the user
+to verify. Only hand off what genuinely needs real interaction, LLM traffic,
+or visual judgment. In practice:
+
+1. `./check.sh` — always; fix all errors AND warnings.
+2. Smoke-test pure logic with `npx tsx` throwaway scripts (tree/compaction/
+   storage helpers are importable without a browser). Assert the expected
+   semantics and print a pass/fail summary. Session-tree and compaction bugs
+   shipped because no smoke test covered the linear-chain case — cover the
+   ordinary case plus the regression being fixed.
+3. Verify chrome API usage against `node_modules/@types/chrome` .d.ts when
+   touching new APIs (e.g. chrome.readingList is addEntry/updateEntry, not
+   the addReadingItem names found in blog posts).
+4. Assert on build output after `./install.sh`: grep `dist-chrome/` for what
+   must be there (custom element defines, tool registration, permissions) and
+   what must NOT (DOM references in `background.js` — the service worker has
+   no window/document and fails to register, which silently kills the
+   sidepanel toggle).
+5. When Chrome runs with remote debugging (:9222), verify against the live
+   extension instead of guessing: `chrome.developerPrivate.getExtensionInfo`
+   for manifest errors and SW registration, attach to the sidepanel target to
+   inspect DOM/runtime state (message roles, customElements.get, element
+   geometry), open dialogs programmatically, and check chrome.storage data.
+   Reload the extension via `developerPrivate.reload` when needed.
+6. Close out by telling the user exactly which acceptance items still need
+   their hands (real LLM runs, native dialogs, visual checks, multi-window
+   behavior). Never present "installed" as "verified".
+
 ### Agent tools
 - Tools live in `src/tools/<name>.ts`: TypeBox schema + class implementing
   `AgentTool` + a `ToolRenderer` registered via `registerToolRenderer`.
