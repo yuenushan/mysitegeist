@@ -15,6 +15,7 @@ import { SkillsStore } from "./stores/skills-store.js";
  * Extended AppStorage for Sitegeist with skills, memories, and prompts stores.
  */
 export class SitegeistAppStorage extends BaseAppStorage {
+	declare readonly sessions: SitegeistSessionsStore;
 	readonly skills: SkillsStore;
 	readonly costs: CostStore;
 

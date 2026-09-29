@@ -34,6 +34,12 @@ import {
 	shouldCompact,
 } from "./agent/compaction/compaction.js";
 import { createSummaryRequest } from "./agent/compaction/summarizer.js";
+import {
+	createSessionTree,
+	migrateMessagesToTree,
+	reconcileTree,
+	type SessionTree,
+} from "./agent/tree/session-tree.js";
 import { Toast } from "./components/Toast.js";
 import { AboutTab } from "./dialogs/AboutTab.js";
 import { ApiKeyOrOAuthDialog } from "./dialogs/ApiKeyOrOAuthDialog.js";
@@ -124,6 +130,9 @@ let authLabel = "";
 // Context compaction (ported from pi 0.87.1)
 const compactionSettings: CompactionSettings = { ...DEFAULT_COMPACTION_SETTINGS };
 let compacting = false;
+
+// Branch tree for the current session (kept in sync via reconcileTree)
+let currentTree: SessionTree = createSessionTree();
 
 const DEFAULT_MODELS: Record<string, string> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
@@ -341,7 +350,7 @@ const saveSession = async () => {
 			preview,
 		};
 
-		await storage.sessions.saveSession(currentSessionId, state, metadata, currentTitle);
+		await storage.sessions.saveSession(currentSessionId, state, metadata, currentTitle, currentTree);
 	} catch (err) {
 		console.error("Failed to save session:", err);
 	}
@@ -418,6 +427,7 @@ const runCompaction = async (customInstructions?: string, source: "manual" | "au
 
 		const compactionMessage = createCompactionMessage(result.summary, result.tokensBefore, result.usage);
 		agent.replaceMessages([compactionMessage, ...result.retainedTail]);
+		currentTree = reconcileTree(currentTree, agent.state.messages);
 
 		if (currentSessionId) {
 			await saveSession();
@@ -446,10 +456,13 @@ const updateUrl = (sessionId: string) => {
 	window.history.replaceState({}, "", url);
 };
 
-const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true) => {
+const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true, tree?: SessionTree) => {
 	if (agentUnsubscribe) {
 		agentUnsubscribe();
 	}
+
+	// Adopt the loaded tree, migrate loaded flat messages, or start fresh
+	currentTree = tree ?? (initialState?.messages ? migrateMessagesToTree(initialState.messages) : createSessionTree());
 
 	// Mark all loaded messages as already recorded (by object identity)
 	for (const msg of initialState?.messages || []) {
@@ -567,6 +580,12 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 						}
 					});
 				updateUrl(currentSessionId);
+			}
+
+			// Sync the branch tree at stable points only: during streaming the
+			// assistant message object is replaced on every delta event
+			if (!agent.state.isStreaming) {
+				currentTree = reconcileTree(currentTree, messages);
 			}
 
 			if (event.type === "agent_end") {
@@ -1187,13 +1206,17 @@ async function initApp() {
 			const metadata = await storage.sessions.getMetadata(sessionIdFromUrl);
 			currentTitle = metadata?.title || "";
 
-			await createAgent({
-				systemPrompt: SYSTEM_PROMPT,
-				model: sessionData.model,
-				thinkingLevel: sessionData.thinkingLevel,
-				messages: sessionData.messages,
-				tools: [],
-			});
+			await createAgent(
+				{
+					systemPrompt: SYSTEM_PROMPT,
+					model: sessionData.model,
+					thinkingLevel: sessionData.thinkingLevel,
+					messages: sessionData.messages,
+					tools: [],
+				},
+				true,
+				sessionData.sessionTree,
+			);
 
 			renderApp();
 			return;
