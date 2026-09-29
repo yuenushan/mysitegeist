@@ -198,21 +198,9 @@ export class AgentSchedulerTool implements AgentTool<typeof schedulerSchema, Sch
 }
 
 // ============================================================================
-// SERVICE WORKER SIDE (wired from background.ts)
+// SERVICE WORKER SIDE (implementation lives in utils/scheduler-background.ts -
+// DOM-free so the background bundle stays free of component code)
 // ============================================================================
-
-/** Handle a fired alarm: show its stored message as a system notification. */
-export async function handleAlarmFired(alarm: chrome.alarms.Alarm): Promise<void> {
-	const stored = await chrome.storage.local.get("scheduler_messages");
-	const messages = (stored.scheduler_messages as Record<string, string>) || {};
-	const message = messages[alarm.name] ?? `Scheduled reminder: ${alarm.name}`;
-	chrome.notifications.create(`${ALARM_NOTIFICATION_PREFIX}${alarm.name}-${Date.now()}`, {
-		type: "basic",
-		iconUrl: chrome.runtime.getURL("icon-128.png"),
-		title: "Sitegeist",
-		message,
-	});
-}
 
 // ============================================================================
 // RENDERER

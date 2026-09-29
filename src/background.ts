@@ -1,5 +1,5 @@
-import { handleAlarmFired } from "./tools/agent-scheduler.js";
 import type { LockedSessionsMessage, LockResultMessage, SidepanelToBackgroundMessage } from "./utils/port.js";
+import { handleAlarmFired } from "./utils/scheduler-background.js";
 
 // ============================================================================
 // CONTEXT MENUS (Task: right-click integration)
