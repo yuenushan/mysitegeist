@@ -88,8 +88,11 @@ This fork adds local-only conventions on top of upstream. Keep this section
 when merging upstream changes.
 
 ### Remotes
-- `origin` = upstream badlogic/sitegeist (fetch-only in practice)
-- `fork` = git@github.com:yuenushan/mysitegeist.git (push work here)
+- `origin` = git@github.com:yuenushan/mysitegeist.git (this fork - push work here,
+  `main` tracks `origin/main`)
+- `upstream` = https://github.com/badlogic/sitegeist.git (badlogic upstream,
+  fetch-only in practice; renamed from `origin` - pull requests/updates come
+  from here)
 
 ### Dependency pinning (IMPORTANT)
 - `../pi-mono` MUST be the 2026-03-24 snapshot (upstream commit `21950c5ba4`).
