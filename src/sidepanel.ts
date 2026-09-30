@@ -79,6 +79,7 @@ import { NativeInputEventsRuntimeProvider } from "./tools/NativeInputEventsRunti
 import { isToolNavigating, NavigateTool } from "./tools/navigate.js";
 import { createReplTool } from "./tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "./tools/repl/runtime-providers.js";
+import { buildSessionExportHtml } from "./utils/export-html.js";
 import * as port from "./utils/port.js";
 import "./utils/i18n-extension.js";
 import "./utils/live-reload.js";
@@ -524,6 +525,50 @@ const maybeAutoCompact = async (): Promise<void> => {
 	await runCompaction(undefined, "auto");
 };
 
+const exportCurrentSession = async (): Promise<void> => {
+	if (!agent) return;
+	if (agent.state.messages.length === 0) {
+		Toast.error("Nothing to export yet - start a conversation first");
+		return;
+	}
+	try {
+		const messages = agent.state.messages;
+		const usage = messages.reduce(
+			(acc, msg) => {
+				if (msg.role === "assistant" && msg.usage) {
+					acc.totalTokens += (msg.usage.input ?? 0) + (msg.usage.output ?? 0);
+					acc.totalCost += msg.usage.cost?.total ?? 0;
+				}
+				return acc;
+			},
+			{ totalTokens: 0, totalCost: 0 },
+		);
+		const llmMessages = await browserMessageTransformer(messages);
+		const html = buildSessionExportHtml({
+			header: {
+				sessionId: currentSessionId ?? "(not saved)",
+				title: currentTitle ?? "Untitled session",
+				model: agent.state.model ? `${agent.state.model.provider}/${agent.state.model.id}` : "(none)",
+				thinkingLevel: agent.state.thinkingLevel,
+				messageCount: messages.length,
+				totalTokens: usage.totalTokens,
+				totalCost: usage.totalCost,
+			},
+			systemPrompt: agent.state.systemPrompt,
+			tools: agent.state.tools?.map((tool) => ({ name: tool.name, description: tool.description ?? "" })),
+			messages,
+			llmMessages,
+		});
+		const blob = new Blob([html], { type: "text/html" });
+		const url = URL.createObjectURL(blob);
+		chrome.tabs.create({ url });
+		Toast.success("Session exported to a new tab");
+	} catch (err) {
+		console.error("Session export failed:", err);
+		Toast.error(`Export failed: ${(err as Error).message}`);
+	}
+};
+
 const jumpToTreeEntry = (entryId: string): boolean => {
 	if (!agent) return false;
 	if (agent.state.isStreaming) {
@@ -759,6 +804,11 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 					description: "Summarize older context to free up tokens; optionally add focus instructions",
 					insertText: "/compact ",
 				},
+				{
+					label: "/export",
+					description: "Export the current session to a standalone HTML page (prompts, transcript, LLM view)",
+					insertText: "/export",
+				},
 			];
 			try {
 				const skills = await storage.skills.list();
@@ -782,6 +832,10 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			idleNavCount = 0;
 
 			const trimmed = input.trim();
+			if (trimmed === "/export") {
+				await exportCurrentSession();
+				return true; // handled: cancel send, clear editor
+			}
 			if (trimmed.startsWith("/compact")) {
 				const instructions = trimmed.slice("/compact".length).trim();
 				await runCompaction(instructions || undefined, "manual");
