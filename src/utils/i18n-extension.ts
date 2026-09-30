@@ -18,6 +18,19 @@ declare module "@mariozechner/mini-lit" {
 		// Session tree dialog
 		"Compacting context...": string;
 		Browsing: string;
+		Confirm: string;
+		Cancel: string;
+		"Enable extension": string;
+		"Disable extension": string;
+		"Uninstall extension": string;
+		"Open downloaded file": string;
+		"Sitegeist's agent wants to perform this action and needs your confirmation.": string;
+		"Chrome requires this action to be triggered by a real user click. Confirming here provides that click; nothing happens if you cancel.": string;
+		"The extension becomes active again.": string;
+		"The extension stops running until re-enabled. Its settings are kept.": string;
+		"This removes the extension and its data. Chrome will ask you to confirm again.": string;
+		"Chrome opens the file with its default application.": string;
+		"Cancelled by user in the confirmation dialog - nothing was changed.": string;
 		"Browse follow": string;
 		"Activity timeout (minutes)": string;
 		"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.": string;
@@ -207,6 +220,24 @@ const sitegeistTranslations = {
 		"Update Now": "Update Now",
 		"Compacting context...": "Compacting context...",
 		Browsing: "Browsing",
+		Confirm: "Confirm",
+		Cancel: "Cancel",
+		"Enable extension": "Enable extension",
+		"Disable extension": "Disable extension",
+		"Uninstall extension": "Uninstall extension",
+		"Open downloaded file": "Open downloaded file",
+		"Sitegeist's agent wants to perform this action and needs your confirmation.":
+			"Sitegeist's agent wants to perform this action and needs your confirmation.",
+		"Chrome requires this action to be triggered by a real user click. Confirming here provides that click; nothing happens if you cancel.":
+			"Chrome requires this action to be triggered by a real user click. Confirming here provides that click; nothing happens if you cancel.",
+		"The extension becomes active again.": "The extension becomes active again.",
+		"The extension stops running until re-enabled. Its settings are kept.":
+			"The extension stops running until re-enabled. Its settings are kept.",
+		"This removes the extension and its data. Chrome will ask you to confirm again.":
+			"This removes the extension and its data. Chrome will ask you to confirm again.",
+		"Chrome opens the file with its default application.": "Chrome opens the file with its default application.",
+		"Cancelled by user in the confirmation dialog - nothing was changed.":
+			"Cancelled by user in the confirmation dialog - nothing was changed.",
 		"Browse follow": "Browse follow",
 		"Activity timeout (minutes)": "Activity timeout (minutes)",
 		"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.":
@@ -321,6 +352,24 @@ const sitegeistTranslations = {
 		"Update Now": "Jetzt aktualisieren",
 		"Compacting context...": "Kontext wird komprimiert ...",
 		Browsing: "Browsing",
+		Confirm: "Best\u00e4tigen",
+		Cancel: "Abbrechen",
+		"Enable extension": "Erweiterung aktivieren",
+		"Disable extension": "Erweiterung deaktivieren",
+		"Uninstall extension": "Erweiterung deinstallieren",
+		"Open downloaded file": "Heruntergeladene Datei \u00f6ffnen",
+		"Sitegeist's agent wants to perform this action and needs your confirmation.":
+			"Sitegeists Agent m\u00f6chte diese Aktion ausf\u00fchren und ben\u00f6tigt Ihre Best\u00e4tigung.",
+		"Chrome requires this action to be triggered by a real user click. Confirming here provides that click; nothing happens if you cancel.":
+			"Chrome verlangt f\u00fcr diese Aktion einen echten Nutzerklick. Die Best\u00e4tigung hier liefert genau diesen; bei Abbruch passiert nichts.",
+		"The extension becomes active again.": "Die Erweiterung wird wieder aktiv.",
+		"The extension stops running until re-enabled. Its settings are kept.":
+			"Die Erweiterung stoppt bis zur Reaktivierung. Ihre Einstellungen bleiben erhalten.",
+		"This removes the extension and its data. Chrome will ask you to confirm again.":
+			"Dies entfernt die Erweiterung samt Daten. Chrome fragt danach noch einmal nach.",
+		"Chrome opens the file with its default application.": "Chrome \u00f6ffnet die Datei mit der Standardanwendung.",
+		"Cancelled by user in the confirmation dialog - nothing was changed.":
+			"Vom Nutzer im Best\u00e4tigungsdialog abgebrochen - nichts wurde ge\u00e4ndert.",
 		"Browse follow": "Browsing folgen",
 		"Activity timeout (minutes)": "Inaktivit\u00e4tsschwellwert (Minuten)",
 		"Controls how page navigations interact with the agent. Navigations are always recorded in the session history; whether they may trigger a response is gated below.":

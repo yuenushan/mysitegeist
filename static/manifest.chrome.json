@@ -45,6 +45,7 @@
 		"history",
 		"sessions",
 		"downloads",
+		"downloads.open",
 		"readingList",
 		"contextMenus",
 		"alarms",

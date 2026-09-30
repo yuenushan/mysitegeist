@@ -1,9 +1,12 @@
+import i18n from "@mariozechner/mini-lit/dist/i18n.js";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { registerToolRenderer, renderHeader, type ToolRenderer, type ToolRenderResult } from "@mariozechner/pi-web-ui";
 import { type Static, Type } from "@sinclair/typebox";
 import { html } from "lit";
 import { LayoutGrid } from "lucide";
+import { ConfirmActionDialog } from "../dialogs/ConfirmActionDialog.js";
+import "../utils/i18n-extension.js";
 
 const WORKSPACE_TOOL_DESCRIPTION = `Manage the browser workspace: tabs, tab groups, history, recently closed sessions, downloads and the reading list.
 
@@ -16,7 +19,7 @@ Operations:
 - recently_closed: List recently closed tabs/windows (max 20).
 - restore_closed: Reopen a recently closed tab/window. Without sessionId restores the most recent one.
 - list_downloads: List download items (optionally filter by query string or state: in_progress/complete/interrupted).
-- download_action: Control a download: pause | resume | cancel | show (open containing folder) | open (open the file).
+- download_action: Control a download: pause | resume | cancel | show (reveal the file in its folder) | open (open the file with its default app - shows a confirmation dialog because Chrome requires a user gesture).
 - reading_list: Reading list operations (keyed by URL): add {url, title?} | list | mark_read {readingUrl, hasBeenRead?} | remove {readingUrl}.
 
 Notes:
@@ -428,9 +431,34 @@ export class BrowserWorkspaceTool implements AgentTool<typeof workspaceSchema, W
 			case "show":
 				chrome.downloads.show(id);
 				break;
-			case "open":
-				chrome.downloads.open(id);
+			case "open": {
+				// chrome.downloads.open can only be called in response to a user
+				// gesture; the dialog click provides it
+				let openFailure: string | undefined;
+				const fileName = item.filename?.split("/").pop() || "unknown file";
+				const confirmed = await ConfirmActionDialog.request(
+					{
+						title: i18n("Open downloaded file"),
+						subjectLine: `File: ${fileName}`,
+						consequence: i18n("Chrome opens the file with its default application."),
+					},
+					async () => {
+						try {
+							await chrome.downloads.open(id);
+							return { ok: true };
+						} catch (error) {
+							openFailure = (error as Error).message;
+							return { ok: false, message: openFailure };
+						}
+					},
+				);
+				if (!confirmed) {
+					throw new Error(
+						openFailure ?? i18n("Cancelled by user in the confirmation dialog - nothing was changed."),
+					);
+				}
 				break;
+			}
 		}
 
 		const details: WorkspaceDetails = {

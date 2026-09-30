@@ -1,21 +1,24 @@
+import i18n from "@mariozechner/mini-lit/dist/i18n.js";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { registerToolRenderer, renderHeader, type ToolRenderer, type ToolRenderResult } from "@mariozechner/pi-web-ui";
 import { type Static, Type } from "@sinclair/typebox";
 import { html } from "lit";
 import { Puzzle } from "lucide";
+import { ConfirmActionDialog } from "../dialogs/ConfirmActionDialog.js";
+import "../utils/i18n-extension.js";
 
 const EXTENSIONS_TOOL_DESCRIPTION = `Inspect and manage installed Chrome extensions via the chrome.management API.
 
 Operations:
 - list_installed: List all installed extensions with name, version, enabled state, permissions and icon.
 - get_detail: Full info for one extension by id.
-- set_enabled: Enable or disable an extension by id.
-- uninstall: Uninstall an extension by id. Requires confirm: true (Chrome additionally shows a native confirmation dialog).
+- set_enabled: Enable or disable an extension by id. Chrome requires a real user click for this: the sidepanel shows a confirmation dialog and the action runs only if the user confirms. If the user cancels, the operation is not performed.
+- uninstall: Uninstall an extension by id. Requires confirm: true from you; the sidepanel then shows a confirmation dialog (the user's click is the gesture Chrome requires) followed by Chrome's native confirm dialog. If either is dismissed, nothing is uninstalled.
 
 Safety rules:
 - This extension itself (its own id) can NEVER be disabled or uninstalled - such requests are rejected.
-- Disabled extensions keep their settings; re-enable with set_enabled.`;
+- The gesture-gated confirmation dialogs CANNOT be bypassed (no chrome:// WebUI tricks, no CDP clicking). If the user cancels, report that the action was cancelled - do not retry or attempt workarounds.`;
 
 const extensionsSchema = Type.Object({
 	operation: Type.Union(
@@ -158,15 +161,44 @@ export class BrowserExtensionsTool implements AgentTool<typeof extensionsSchema,
 		if (!info.mayDisable) {
 			throw new Error(`"${info.name}" cannot be disabled from here (managed by policy or not user-controllable)`);
 		}
-		await call(() => chrome.management.setEnabled(id, enabled));
+
+		// chrome.management.setEnabled requires a user-gesture context; the dialog
+		// click provides it (the callback runs synchronously in the click handler)
+		let failureMessage: string | undefined;
+		const confirmed = await ConfirmActionDialog.request(
+			{
+				title: enabled ? i18n("Enable extension") : i18n("Disable extension"),
+				subjectLine: `Extension: ${info.name} (id ${info.id})`,
+				consequence: enabled
+					? i18n("The extension becomes active again.")
+					: i18n("The extension stops running until re-enabled. Its settings are kept."),
+			},
+			async () => {
+				try {
+					await chrome.management.setEnabled(id, enabled);
+					return { ok: true };
+				} catch (error) {
+					failureMessage = (error as Error).message;
+					return { ok: false, message: failureMessage };
+				}
+			},
+		);
+		if (!confirmed) {
+			throw new Error(failureMessage ?? i18n("Cancelled by user in the confirmation dialog - nothing was changed."));
+		}
 
 		const details: ExtensionsDetails = {
 			operation: "set_enabled",
 			count: 1,
-			summary: `${enabled ? "Enabled" : "Disabled"} "${info.name}"`,
+			summary: `${enabled ? "Enabled" : "Disabled"} "${info.name}" (user confirmed in dialog)`,
 		};
 		return {
-			content: [{ type: "text", text: `${enabled ? "Enabled" : "Disabled"} "${info.name}" (id ${id})` }],
+			content: [
+				{
+					type: "text",
+					text: `${enabled ? "Enabled" : "Disabled"} "${info.name}" (id ${id}) after user confirmation`,
+				},
+			],
 			details,
 		};
 	}
@@ -188,13 +220,34 @@ export class BrowserExtensionsTool implements AgentTool<typeof extensionsSchema,
 		if (!info.mayDisable) {
 			throw new Error(`"${info.name}" cannot be uninstalled from here (managed by policy or not user-controllable)`);
 		}
-		// Chrome shows its native confirm dialog; an empty prompt string keeps it default
-		await call(() => chrome.management.uninstall(id, { showConfirmDialog: true }));
+
+		// Two-layer confirmation: this dialog (real user click = the gesture
+		// Chrome requires) then Chrome's native uninstall confirmation.
+		let failureMessage: string | undefined;
+		const confirmed = await ConfirmActionDialog.request(
+			{
+				title: i18n("Uninstall extension"),
+				subjectLine: `Extension: ${info.name} (id ${info.id})`,
+				consequence: i18n("This removes the extension and its data. Chrome will ask you to confirm again."),
+			},
+			async () => {
+				try {
+					await chrome.management.uninstall(id, { showConfirmDialog: true });
+					return { ok: true };
+				} catch (error) {
+					failureMessage = (error as Error).message;
+					return { ok: false, message: failureMessage };
+				}
+			},
+		);
+		if (!confirmed) {
+			throw new Error(failureMessage ?? i18n("Cancelled by user in the confirmation dialog - nothing was changed."));
+		}
 
 		const details: ExtensionsDetails = {
 			operation: "uninstall",
 			count: 1,
-			summary: `Uninstalled "${info.name}"`,
+			summary: `Uninstalled "${info.name}" (user confirmed in dialog)`,
 		};
 		return {
 			content: [{ type: "text", text: `Uninstalled "${info.name}" (id ${id})` }],

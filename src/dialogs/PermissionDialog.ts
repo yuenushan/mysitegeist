@@ -53,6 +53,14 @@ export abstract class PermissionDialog extends DialogBase {
 		});
 	}
 
+	protected denyLabel(): string {
+		return i18n("Continue Anyway");
+	}
+
+	protected confirmLabel(): string {
+		return i18n("Grant Permission");
+	}
+
 	private async handleGrant() {
 		if (!this.grantCallback) return;
 
@@ -142,13 +150,13 @@ export abstract class PermissionDialog extends DialogBase {
 							variant: "outline",
 							onClick: () => this.handleDeny(),
 							disabled: this.requesting,
-							children: i18n("Continue Anyway"),
+							children: this.denyLabel(),
 						})}
 						${Button({
 							variant: "default",
 							onClick: () => this.handleGrant(),
 							disabled: this.requesting,
-							children: this.requesting ? i18n("Requesting...") : i18n("Grant Permission"),
+							children: this.requesting ? i18n("Requesting...") : this.confirmLabel(),
 						})}
 					</div>
 				`,
