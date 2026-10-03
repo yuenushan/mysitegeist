@@ -67,6 +67,16 @@ On first launch, Sitegeist prompts you to connect at least one AI provider. You 
 
 Some subscription logins require the CORS proxy (configurable in Settings > Proxy). The default proxy is `https://proxy.mariozechner.at/proxy`.
 
+## MCP server (pi integration)
+
+Sitegeist's agent tools can be driven from an external MCP client such as pi: it navigates tabs, runs in-page JavaScript, extracts documents and images, and manages bookmarks, tabs, history, downloads, extensions and skills.
+
+```bash
+node scripts/mcp-register.mjs   # registers the bridge in ~/.pi/agent/mcp.json
+```
+
+Then start a pi session and open the Sitegeist side panel - its tools appear as `mcp__sitegeist__<tool>`. The bridge (`scripts/mcp-bridge.mjs`) is spawned by pi and relays calls to the side panel over a loopback WebSocket; no inbound connections reach the browser. See [docs/mcp.md](docs/mcp.md) for architecture, other MCP clients, and troubleshooting.
+
 ## Checks
 
 ```bash

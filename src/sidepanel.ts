@@ -49,6 +49,7 @@ import { ApiKeyOrOAuthDialog } from "./dialogs/ApiKeyOrOAuthDialog.js";
 import { ApiKeysOAuthTab } from "./dialogs/ApiKeysOAuthTab.js";
 import { BrowsingTab } from "./dialogs/BrowsingTab.js";
 import { CostsTab } from "./dialogs/CostsTab.js";
+import { McpTab } from "./dialogs/McpTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
 import { SessionTreeDialog } from "./dialogs/SessionTreeDialog.js";
@@ -56,6 +57,7 @@ import { SkillsTab } from "./dialogs/SkillsTab.js";
 import { UpdateNotificationDialog } from "./dialogs/UpdateNotificationDialog.js";
 import { UserScriptsPermissionDialog } from "./dialogs/UserScriptsPermissionDialog.js";
 import { WelcomeSetupDialog } from "./dialogs/WelcomeSetupDialog.js";
+import { getMcpBridgeClient } from "./mcp/bridge-client.js";
 import { createCompactionMessage, registerCompactionRenderer } from "./messages/CompactionMessage.js";
 import { browserMessageTransformer } from "./messages/message-transformer.js";
 import {
@@ -69,6 +71,7 @@ import { isOAuthCredentials, resolveApiKey } from "./oauth/index.js";
 import { SYSTEM_PROMPT } from "./prompts/prompts.js";
 import { SitegeistAppStorage } from "./storage/app-storage.js";
 import { AgentSchedulerTool, registerAgentSchedulerRenderer } from "./tools/agent-scheduler.js";
+import { bindAgentTaskHost } from "./tools/agent-task.js";
 import { BookmarksTool, registerBookmarksRenderer } from "./tools/bookmarks.js";
 import { BrowserExtensionsTool, registerBrowserExtensionsRenderer } from "./tools/browser-extensions.js";
 import { BrowserWorkspaceTool, registerBrowserWorkspaceRenderer } from "./tools/browser-workspace.js";
@@ -228,6 +231,7 @@ function openApiKeysDialog(): Promise<void> {
 				new CostsTab(),
 				new SkillsTab(),
 				new BrowsingTab(),
+				new McpTab(),
 				new ProxyTab(),
 				new AboutTab(),
 			],
@@ -878,7 +882,9 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			if (!agent) return;
 			SessionCostDialog.open(agent.state.messages);
 		},
-		toolsFactory: (_agent, _agentInterface, _artifactsPanel, runtimeProvidersFactory) => {
+		toolsFactory: (agent, _agentInterface, _artifactsPanel, runtimeProvidersFactory) => {
+			// The MCP agent_task tool delegates to whichever Agent instance is live here.
+			bindAgentTaskHost(agent);
 			const navigateTool = new NavigateTool();
 			const selectElementTool = new AskUserWhichElementTool();
 
@@ -1106,6 +1112,7 @@ const renderApp = () => {
 								new CostsTab(),
 								new SkillsTab(),
 								new BrowsingTab(),
+								new McpTab(),
 								new ProxyTab(),
 								new AboutTab(),
 							]),
@@ -1549,5 +1556,9 @@ async function initApp() {
 
 // Register custom user message renderer early, before any session loads
 registerUserMessageRenderer();
+
+// Connect to the Sitegeist MCP bridge when it is running; the panel's agent
+// tools become available to MCP clients such as pi (see docs/mcp.md)
+getMcpBridgeClient().start();
 
 initApp();

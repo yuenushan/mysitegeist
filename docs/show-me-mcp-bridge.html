@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sitegeist MCP Bridge 架构</title>
+<style>
+	:root {
+		--bg: #fafafa; --card: #ffffff; --border: #e5e7eb; --fg: #111827;
+		--muted: #6b7280; --accent: #4f46e5; --accent-soft: #eef2ff;
+		--teal: #0d9488; --teal-soft: #f0fdfa; --amber: #b45309; --amber-soft: #fffbeb;
+		--red: #b91c1c; --red-soft: #fef2f2; --green: #15803d; --green-soft: #f0fdf4;
+		--code-bg: #f3f4f6; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #0f1115; --card: #171a21; --border: #2a2f3a; --fg: #e5e7eb;
+			--muted: #9ca3af; --accent: #818cf8; --accent-soft: #1e1b4b;
+			--teal: #2dd4bf; --teal-soft: #042f2e; --amber: #fbbf24; --amber-soft: #291a04;
+			--red: #f87171; --red-soft: #2a0d0d; --green: #4ade80; --green-soft: #052e16;
+			--code-bg: #232833;
+		}
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; background: var(--bg); color: var(--fg);
+		font-family: system-ui, -apple-system, "PingFang SC", "Segoe UI", sans-serif;
+		line-height: 1.55; padding: 24px 16px 48px;
+	}
+	main { max-width: 960px; margin: 0 auto; }
+	h1 { font-size: 22px; margin: 0 0 4px; }
+	.sub { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+	.sub code { font-family: var(--mono); font-size: 12.5px; }
+	section { margin: 0 0 36px; }
+	h2 { font-size: 16px; margin: 0 0 4px; }
+	h2 .no { color: var(--accent); font-family: var(--mono); margin-right: 6px; }
+	.conclusion { font-size: 14px; color: var(--fg); margin: 0 0 14px; }
+	.conclusion b { color: var(--accent); }
+	.card {
+		background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+		padding: 14px;
+	}
+	.svgwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+	.svgwrap svg { min-width: 780px; width: 100%; height: auto; display: block; }
+	.hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+	@media (min-width: 800px) { .hint { display: none; } }
+	code {
+		font-family: var(--mono); font-size: 12.5px; background: var(--code-bg);
+		padding: 1px 5px; border-radius: 4px;
+	}
+	/* ---- SVG shared classes ---- */
+	svg text { font-family: system-ui, -apple-system, "PingFang SC", sans-serif; }
+	.box { fill: var(--card); stroke: var(--border); stroke-width: 1.2; rx: 8; }
+	.box-master { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+	.box-proxy { fill: var(--amber-soft); stroke: var(--amber); stroke-width: 1.2; stroke-dasharray: 5 3; }
+	.box-panel { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 1.4; }
+	.t { fill: var(--fg); font-size: 13px; }
+	.tb { fill: var(--fg); font-size: 13.5px; font-weight: 600; }
+	.tm { fill: var(--muted); font-size: 11.5px; }
+	.tcode { fill: var(--accent); font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+	.flow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+	.flow-hot { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+	.flow-dash { stroke: var(--amber); stroke-width: 1.4; fill: none; stroke-dasharray: 5 3; }
+	.arrow { fill: var(--muted); }
+	.arrow-hot { fill: var(--accent); }
+	.arrow-dash { fill: var(--amber); }
+	.tag { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+	/* ---- steps ---- */
+	.steps { list-style: none; margin: 0; padding: 0; }
+	.steps li {
+		position: relative; padding: 0 0 14px 40px; margin: 0;
+	}
+	.steps li::before {
+		content: attr(data-n); position: absolute; left: 0; top: 1px;
+		width: 26px; height: 26px; border-radius: 50%;
+		background: var(--accent-soft); color: var(--accent);
+		font-family: var(--mono); font-size: 12px; font-weight: 700;
+		display: flex; align-items: center; justify-content: center;
+	}
+	.steps li::after {
+		content: ""; position: absolute; left: 13px; top: 29px; bottom: 2px;
+		width: 1px; background: var(--border);
+	}
+	.steps li:last-child::after { display: none; }
+	.steps .who { font-weight: 600; font-size: 13.5px; }
+	.steps .what { color: var(--muted); font-size: 13px; }
+	/* ---- tool grid ---- */
+	.tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+	.tool {
+		border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+		background: var(--card); font-size: 12.5px;
+	}
+	.tool .n { font-family: var(--mono); font-weight: 600; color: var(--accent); font-size: 12px; }
+	.tool .d { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+	.tool.gated { border-style: dashed; }
+	/* ---- timeline ---- */
+	.tl { border-left: 2px solid var(--border); margin-left: 8px; padding-left: 18px; display: grid; gap: 14px; }
+	.tl .ev { position: relative; font-size: 13px; }
+	.tl .ev::before {
+		content: ""; position: absolute; left: -24px; top: 5px;
+		width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+	}
+	.tl .ev.bad::before { background: var(--red); }
+	.tl .ev.good::before { background: var(--green); }
+	.tl .ev b { font-size: 13.5px; }
+	.tl .ev .m { color: var(--muted); }
+	/* ---- footer ---- */
+	footer {
+		border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px;
+		color: var(--muted); font-size: 12px; display: grid; gap: 4px;
+	}
+	.kv { display: flex; gap: 8px; flex-wrap: wrap; }
+	.kv span { background: var(--code-bg); border-radius: 4px; padding: 1px 6px; }
+</style>
+</head>
+<body>
+<main>
+	<h1>Sitegeist MCP Bridge 架构</h1>
+	<p class="sub">把浏览器 agent 工具开放给 pi：<code>pi</code> ──stdio──▶ <code>scripts/mcp-bridge.mjs</code> ◀──ws://127.0.0.1:8377── <code>sidepanel</code>（面板主动外连，浏览器零入站）</p>
+
+	<section>
+		<h2><span class="no">01</span>总览：MCP 客户端是怎么"够到"浏览器的</h2>
+		<p class="conclusion">结论：<b>工具不搬进 Node，桥只是转发器</b>——sidepanel 把自己的 AgentTool 目录用 <code>hello</code> 上报，桥原样透出为 <code>tools/list</code>；调用在扩展进程里执行，所以权限弹窗、confirm 语义与侧栏内完全一致。</p>
+		<div class="card svgwrap">
+			<svg viewBox="0 0 880 340" role="img" aria-label="MCP bridge 总览数据流">
+				<defs>
+					<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+						<path d="M0,0 L10,5 L0,10 z" class="arrow"></path>
+					</marker>
+					<marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+						<path d="M0,0 L10,5 L0,10 z" class="arrow-hot"></path>
+					</marker>
+				</defs>
+
+				<!-- pi agent -->
+				<rect x="20" y="90" width="190" height="120" class="box" rx="8"></rect>
+				<text x="115" y="118" text-anchor="middle" class="tb">pi agent</text>
+				<text x="115" y="140" text-anchor="middle" class="tm">MCP 客户端（可多个会话）</text>
+				<text x="115" y="162" text-anchor="middle" class="tcode">initialize / tools/list</text>
+				<text x="115" y="180" text-anchor="middle" class="tcode">tools/call · cancelled</text>
+				<text x="115" y="198" text-anchor="middle" class="tcode">tools/list_changed</text>
+
+				<!-- bridge -->
+				<rect x="330" y="70" width="230" height="160" class="box-master" rx="8"></rect>
+				<text x="445" y="98" text-anchor="middle" class="tb">scripts/mcp-bridge.mjs</text>
+				<text x="445" y="118" text-anchor="middle" class="tm">Node 进程 · 零新增依赖 · 无状态目录</text>
+				<text x="445" y="146" text-anchor="middle" class="tcode">stdio: 新行分隔 JSON-RPC</text>
+				<text x="445" y="166" text-anchor="middle" class="tcode">ws://127.0.0.1:8377 (LISTEN)</text>
+				<text x="445" y="186" text-anchor="middle" class="tcode">GET /health · POST /rpc</text>
+				<text x="445" y="212" text-anchor="middle" class="tm">日志全走 stderr，stdout 只跑协议</text>
+
+				<!-- chrome -->
+				<rect x="680" y="70" width="180" height="160" class="box-panel" rx="8"></rect>
+				<text x="770" y="98" text-anchor="middle" class="tb">Chrome · sitegeist</text>
+				<text x="770" y="120" text-anchor="middle" class="tm">sidepanel（工具执行地）</text>
+				<text x="770" y="146" text-anchor="middle" class="tcode">hello{tools[]} → 上报目录</text>
+				<text x="770" y="166" text-anchor="middle" class="tcode">call → tool.execute()</text>
+				<text x="770" y="186" text-anchor="middle" class="tcode">abort → AbortSignal</text>
+				<text x="770" y="212" text-anchor="middle" class="tm">同一套 AgentTool 实例</text>
+
+				<!-- arrows -->
+				<path d="M210,135 H322" class="flow-hot" marker-end="url(#ahh)"></path>
+				<text x="266" y="124" text-anchor="middle" class="tcode">stdio</text>
+				<path d="M322,170 H218" class="flow-hot" marker-end="url(#ahh)"></path>
+				<text x="268" y="192" text-anchor="middle" class="tcode">结果/错误</text>
+
+				<path d="M672,130 H568" class="flow" marker-end="url(#ah)"></path>
+				<text x="620" y="119" text-anchor="middle" class="tcode">hello / result</text>
+				<path d="M568,190 H672" class="flow" marker-end="url(#ah)"></path>
+				<text x="620" y="212" text-anchor="middle" class="tcode">call / abort · 面板主动外连</text>
+
+				<!-- bottom strip -->
+				<rect x="20" y="266" width="840" height="52" class="tag" rx="8"></rect>
+				<text x="36" y="288" class="t">浏览器不开任何入站端口：面板作为 WS 客户端连出；网页碰不到（回环地址 + 无 CORS 头 + Chrome PNA 拦截）。</text>
+				<text x="36" y="308" class="tm">面板关着 → 工具调用立即返回明确错误；面板开着 → 目录变化自动通知（tools/list_changed）。</text>
+			</svg>
+			<p class="hint">← 左右滑动查看完整图 →</p>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="no">02</span>多实例：为什么多个 pi 会话不再互相踢掉</h2>
+		<p class="conclusion">结论：<b>先抢到端口的 bridge 当 master，后来的自动降为 proxy 挂靠转发</b>——修复了"第二个 bridge 因端口被占 exit(1) → MCP connection closed"的问题。</p>
+		<div class="card svgwrap">
+			<svg viewBox="0 0 880 380" role="img" aria-label="master 与 proxy 多实例模型">
+				<defs>
+					<marker id="bh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+						<path d="M0,0 L10,5 L0,10 z" class="arrow-hot"></path>
+					</marker>
+					<marker id="ba" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+						<path d="M0,0 L10,5 L0,10 z" class="arrow"></path>
+					</marker>
+					<marker id="bd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+						<path d="M0,0 L10,5 L0,10 z" class="arrow-dash"></path>
+					</marker>
+				</defs>
+
+				<!-- pi sessions -->
+				<rect x="20" y="24" width="220" height="64" class="box" rx="8"></rect>
+				<text x="130" y="50" text-anchor="middle" class="tb">pi 会话 A（终端）</text>
+				<text x="130" y="70" text-anchor="middle" class="tm">spawn bridge #1</text>
+				<rect x="330" y="24" width="220" height="64" class="box" rx="8"></rect>
+				<text x="440" y="50" text-anchor="middle" class="tb">pi 会话 B（IDE）</text>
+				<text x="440" y="70" text-anchor="middle" class="tm">spawn bridge #2</text>
+				<rect x="640" y="24" width="220" height="64" class="box" rx="8"></rect>
+				<text x="750" y="50" text-anchor="middle" class="tb">pi 会话 C</text>
+				<text x="750" y="70" text-anchor="middle" class="tm">spawn bridge #3</text>
+
+				<!-- bridges -->
+				<rect x="20" y="150" width="220" height="92" class="box-master" rx="8"></rect>
+				<text x="130" y="176" text-anchor="middle" class="tb">bridge A · MASTER</text>
+				<text x="130" y="196" text-anchor="middle" class="tcode">bind :8377 ✓</text>
+				<text x="130" y="216" text-anchor="middle" class="tm">WS 面板通道 + /rpc + /health</text>
+				<rect x="330" y="150" width="220" height="92" class="box-proxy" rx="8"></rect>
+				<text x="440" y="176" text-anchor="middle" class="tb">bridge B · PROXY</text>
+				<text x="440" y="196" text-anchor="middle" class="tcode">bind :8377 ✗ → /health ✓</text>
+				<text x="440" y="216" text-anchor="middle" class="tm">每 5s 轮询目录变化</text>
+				<rect x="640" y="150" width="220" height="92" class="box-proxy" rx="8"></rect>
+				<text x="750" y="176" text-anchor="middle" class="tb">bridge C · PROXY</text>
+				<text x="750" y="196" text-anchor="middle" class="tcode">bind :8377 ✗ → /health ✓</text>
+				<text x="750" y="216" text-anchor="middle" class="tm">转发 id 加进程唯一 nonce</text>
+
+				<!-- chrome panel -->
+				<rect x="300" y="300" width="280" height="60" class="box-panel" rx="8"></rect>
+				<text x="440" y="325" text-anchor="middle" class="tb">Chrome sidepanel</text>
+				<text x="440" y="345" text-anchor="middle" class="tm">ws://127.0.0.1:8377 —— 只连 master</text>
+
+				<!-- arrows: stdio -->
+				<path d="M130,88 V142" class="flow-hot" marker-end="url(#bh)"></path>
+				<path d="M440,88 V142" class="flow" marker-end="url(#ba)"></path>
+				<path d="M750,88 V142" class="flow" marker-end="url(#ba)"></path>
+				<text x="96" y="120" text-anchor="middle" class="tcode">stdio</text>
+
+				<!-- arrows: proxy forwarding -->
+				<path d="M330,180 C300,180 285,180 248,180" class="flow-dash" marker-end="url(#bd)"></path>
+				<path d="M640,180 C610,180 300,180 248,180" class="flow-dash" marker-end="url(#bd)"></path>
+				<text x="544" y="172" text-anchor="middle" class="tcode">POST /rpc（tools/list · tools/call · cancelled）</text>
+
+				<!-- arrow: master -> panel -->
+				<path d="M440,242 V292" class="flow-hot" marker-end="url(#bh)"></path>
+				<text x="512" y="272" text-anchor="middle" class="tcode">ws://127.0.0.1:8377</text>
+
+				<!-- health note -->
+				<rect x="20" y="300" width="220" height="60" class="tag" rx="8"></rect>
+				<text x="36" y="322" class="t">master 掉线时：</text>
+				<text x="36" y="340" class="tm">proxy 轮询失败 → 探测 /health</text>
+				<text x="36" y="354" class="tm">→ 自动 bind 接管成为新 master</text>
+			</svg>
+			<p class="hint">← 左右滑动查看完整图 →</p>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="no">03</span>一次 tools/call 的旅程</h2>
+		<p class="conclusion">结论：<b>请求最多经一跳 HTTP（proxy→master），执行永远发生在扩展里</b>；取消（用户 ESC 或 120s 超时）会一路转成 <code>AbortSignal</code>，迟到结果被丢弃。</p>
+		<div class="card">
+			<ol class="steps">
+				<li data-n="1"><span class="who">pi → 桥（stdio）</span> <span class="what"><code>tools/call</code> {name, arguments}；pi 侧每请求超时 120s（mcp.json <code>timeout: 120</code>）</span></li>
+				<li data-n="2"><span class="who">proxy → master（可选一跳）</span> <span class="what">重编号 <code>p-&lt;nonce&gt;-&lt;n&gt;</code> 后 <code>POST /rpc</code>；master 按 id 精确匹配取消与回包</span></li>
+				<li data-n="3"><span class="who">master → sidepanel（WebSocket）</span> <span class="what"><code>{type:"call", id, tool, args}</code>；无面板连接时立即返回 <code>isError: true</code> 的明确提示</span></li>
+				<li data-n="4"><span class="who">sidepanel 分发</span> <span class="what">按 name 找工具；先跑 <code>prepare</code> 钩子（如 extract_image 按当前窗口定 windowId），再 <code>tool.execute(id, args, signal)</code></span></li>
+				<li data-n="5"><span class="who">结果回传</span> <span class="what"><code>{type:"result", ok, content, details}</code> → master 组装 MCP 响应：<code>content</code> 透传（文本/图片），<code>details</code> 作为 <code>structuredContent</code>；失败转 <code>isError</code></span></li>
+				<li data-n="6"><span class="who">取消路径</span> <span class="what">pi <code>notifications/cancelled</code> → 桥回放 <code>{type:"abort", id}</code> → 面板 <code>controller.abort()</code>；取消后的迟到结果直接吞掉不回包</span></li>
+			</ol>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="no">04</span>暴露的工具目录（9 + 1）</h2>
+		<p class="conclusion">结论：<b>目录由扩展运行时上报，桥零维护</b>——排除需要侧栏交互的 <code>ask_user_which_element</code>；<code>debugger</code> 仅在扩展调试模式开启时加入。</p>
+		<div class="tools">
+			<div class="tool"><div class="n">navigate</div><div class="d">导航 / 新标签 / 列出与切换标签页</div></div>
+			<div class="tool"><div class="n">repl</div><div class="d">沙箱 iframe 里跑页面 JS（browserjs + 可信输入事件）</div></div>
+			<div class="tool"><div class="n">extract_document</div><div class="d">URL → 文本（HTML / PDF / DOCX / XLSX）</div></div>
+			<div class="tool"><div class="n">extract_image</div><div class="d">窗口截图或按选择器提取元素图</div></div>
+			<div class="tool"><div class="n">bookmarks</div><div class="d">书签树搜索 / 建 / 改 / 移 / 删</div></div>
+			<div class="tool"><div class="n">browser_extensions</div><div class="d">扩展开停 / 卸载 / 详情</div></div>
+			<div class="tool"><div class="n">browser_workspace</div><div class="d">标签组 / 历史 / 最近关闭 / 下载 / 阅读列表</div></div>
+			<div class="tool"><div class="n">agent_scheduler</div><div class="d">命名闹钟调度 + 一次性系统通知</div></div>
+			<div class="tool"><div class="n">skill</div><div class="d">浏览器技能的增删改查</div></div>
+			<div class="tool gated"><div class="n">debugger</div><div class="d">MAIN world 执行 JS —— 仅扩展调试模式开启时</div></div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="no">05</span>自愈与重连时序</h2>
+		<p class="conclusion">结论：<b>所有断线都靠指数退避 + 自动接管兜底，无需人工干预</b>；唯一前提是 sidepanel 开着。</p>
+		<div class="card">
+			<div class="tl">
+				<div class="ev bad"><b>bridge 未运行</b> <span class="m">面板按 1s → 2s → 5s → 10s → 30s 封顶持续重连；Settings → MCP Bridge 显示 "Waiting for bridge..."</span></div>
+				<div class="ev"><b>pi 会话启动 / 热重载</b> <span class="m">spawn bridge：端口空闲 → 直接 master；被占 → 探测 /health（1500ms 超时）→ 是 sitegeist 就做 proxy；占用者非 sitegeist → 重试 ~15s 后退出并报错</span></div>
+				<div class="ev good"><b>面板连上</b> <span class="m">hello 上报 9（或 10）个工具 → master 发 tools/list_changed → pi 刷新工具列表</span></div>
+				<div class="ev bad"><b>master 被杀 / 崩溃</b> <span class="m">proxy 轮询（5s）失败 → /health 确认 → 抢绑端口升级为新 master；面板 ≤30s 重连，目录恢复</span></div>
+				<div class="ev bad"><b>面板关闭</b> <span class="m">WS 断开；in-flight 调用立即收到 "panel disconnected" 错误；新调用返回明确提示，直到面板再次打开</span></div>
+			</div>
+		</div>
+	</section>
+
+	<footer>
+		<div><b>验证记录</b>（2026-10-03，本仓库真实环境）</div>
+		<div class="kv">
+			<span>bridge 协议冒烟 29/29 通过</span>
+			<span>双代理并发同 id 调用独立路由 ✓</span>
+			<span>SIGKILL master → proxy 自动接管 ✓</span>
+			<span>真实 sidepanel 断线后 ≤40s 重连并上报 9 工具 ✓</span>
+			<span>pi mcp list：sitegeist connected（并发 ×2）✓</span>
+		</div>
+		<div>配置：<code>~/.pi/agent/mcp.json</code> → node scripts/mcp-bridge.mjs · timeout 120 · 工具名 <code>mcp__sitegeist__&lt;tool&gt;</code> · 详见 docs/mcp.md</div>
+	</footer>
+</main>
+</body>
+</html>

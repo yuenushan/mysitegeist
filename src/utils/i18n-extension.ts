@@ -126,6 +126,22 @@ declare module "@mariozechner/mini-lit" {
 		"Update Required": string;
 		"A new version ({version}) is available. Please update to continue.": string;
 		"Update Now": string;
+
+		// MCP bridge settings tab
+		"MCP Bridge": string;
+		Connected: string;
+		"Connecting...": string;
+		"Waiting for bridge...": string;
+		Disabled: string;
+		Error: string;
+		"Enable MCP bridge": string;
+		"Bridge port": string;
+		Status: string;
+		"Exposes the agent tools to MCP clients such as pi over a local WebSocket relay (scripts/mcp-bridge.mjs). The bridge is started by the MCP client; the side panel connects to it automatically while this is enabled and the panel is open.": string;
+		"Must match the port the bridge listens on (default 8377, or the --port / SITEGEIST_MCP_PORT value passed to scripts/mcp-bridge.mjs).": string;
+		"To register the bridge with pi, run:": string;
+		"Tools then appear in pi as": string;
+		"See docs/mcp.md for details.": string;
 	}
 }
 
@@ -218,6 +234,24 @@ const sitegeistTranslations = {
 		"A new version ({version}) is available. Please update to continue.":
 			"A new version ({version}) is available. Please update to continue.",
 		"Update Now": "Update Now",
+
+		// MCP bridge settings tab
+		"MCP Bridge": "MCP Bridge",
+		Connected: "Connected",
+		"Connecting...": "Connecting...",
+		"Waiting for bridge...": "Waiting for bridge...",
+		Disabled: "Disabled",
+		Error: "Error",
+		"Enable MCP bridge": "Enable MCP bridge",
+		"Bridge port": "Bridge port",
+		Status: "Status",
+		"Exposes the agent tools to MCP clients such as pi over a local WebSocket relay (scripts/mcp-bridge.mjs). The bridge is started by the MCP client; the side panel connects to it automatically while this is enabled and the panel is open.":
+			"Exposes the agent tools to MCP clients such as pi over a local WebSocket relay (scripts/mcp-bridge.mjs). The bridge is started by the MCP client; the side panel connects to it automatically while this is enabled and the panel is open.",
+		"Must match the port the bridge listens on (default 8377, or the --port / SITEGEIST_MCP_PORT value passed to scripts/mcp-bridge.mjs).":
+			"Must match the port the bridge listens on (default 8377, or the --port / SITEGEIST_MCP_PORT value passed to scripts/mcp-bridge.mjs).",
+		"To register the bridge with pi, run:": "To register the bridge with pi, run:",
+		"Tools then appear in pi as": "Tools then appear in pi as",
+		"See docs/mcp.md for details.": "See docs/mcp.md for details.",
 		"Compacting context...": "Compacting context...",
 		Browsing: "Browsing",
 		Confirm: "Confirm",
@@ -391,6 +425,24 @@ const sitegeistTranslations = {
 		"Continue from here": "Hier fortsetzen",
 		"Onward branches at this point": "Verzweigungen ab diesem Punkt",
 		branches: "Verzweigungen",
+
+		// MCP bridge settings tab
+		"MCP Bridge": "MCP-Bridge",
+		Connected: "Verbunden",
+		"Connecting...": "Verbinde...",
+		"Waiting for bridge...": "Warte auf Bridge...",
+		Disabled: "Deaktiviert",
+		Error: "Fehler",
+		"Enable MCP bridge": "MCP-Bridge aktivieren",
+		"Bridge port": "Bridge-Port",
+		Status: "Status",
+		"Exposes the agent tools to MCP clients such as pi over a local WebSocket relay (scripts/mcp-bridge.mjs). The bridge is started by the MCP client; the side panel connects to it automatically while this is enabled and the panel is open.":
+			"Stellt die Agent-Tools über ein lokales WebSocket-Relay (scripts/mcp-bridge.mjs) für MCP-Clients wie pi bereit. Die Bridge wird vom MCP-Client gestartet; das Side-Panel verbindet sich automatisch, solange dies aktiviert und das Panel geöffnet ist.",
+		"Must match the port the bridge listens on (default 8377, or the --port / SITEGEIST_MCP_PORT value passed to scripts/mcp-bridge.mjs).":
+			"Muss dem Port entsprechen, auf dem die Bridge lauscht (Standard 8377, oder der per --port / SITEGEIST_MCP_PORT an scripts/mcp-bridge.mjs übergebene Wert).",
+		"To register the bridge with pi, run:": "Um die Bridge bei pi zu registrieren, ausführen:",
+		"Tools then appear in pi as": "Tools erscheinen in pi dann als",
+		"See docs/mcp.md for details.": "Details siehe docs/mcp.md.",
 	},
 };
 
