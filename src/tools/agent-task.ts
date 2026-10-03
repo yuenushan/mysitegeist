@@ -2,46 +2,68 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 
 /**
- * Delegate a task to the sidepanel agent itself. The sidepanel agent is the
- * full-fidelity sitegeist: navigation-gated context, skill auto-injection
- * (domain-pattern matched libraries), screenshots/vision, artifacts and
- * human-in-the-loop confirmations. pi orchestrates; sitegeist executes
- * browser-native work and returns the agent's reply.
+ * Delegate a task to the sidepanel agent as a subagent. Unlike the granular
+ * tools (navigate, repl, ...), this hands the whole task to the panel's own
+ * agent - which auto-loads domain skills, can take screenshots and can ask
+ * the user for confirmations/element picks right in the side panel UI.
  *
- * The tool runs inside the sidepanel (via the MCP bridge), so it can reach
- * the live Agent instance directly - no cross-context messaging needed.
+ * Session semantics: the task runs in a FRESH side panel session, never in
+ * the user's current conversation. Implementation rides the panel's own
+ * session-switch mechanism (which is a page navigation):
+ *
+ *   run    -> record the delegation in chrome.storage.session (survives the
+ *             reload), reply "accepted", then navigate the panel to ?new=true
+ *   reload -> initApp's fresh-session branch finds the pending delegation,
+ *             runs agent.prompt(task), writes the result back to session
+ *             storage, then navigates back to the previous session
+ *   status -> any later panel page answers from session storage
+ *
+ * The run reply is sent before the navigation starts (dispatchCall flushes
+ * the WebSocket frame synchronously on return; the navigation is deferred).
  */
 
-/** Minimal structural view of the pi Agent we need. */
-export interface AgentTaskHost {
-	state: { messages: any[]; isStreaming: boolean };
-	prompt: (msg: string) => Promise<void>;
-	abort: () => void;
-	subscribe: (listener: (event: { type: string }) => void) => () => void;
-}
-
-export interface TaskRecord {
+export interface DelegationRecord {
 	taskId: string;
-	status: "running" | "done";
+	prompt: string;
+	status: "pending" | "running" | "done" | "error";
+	prevSessionId: string | null;
+	createdAt: number;
+	finishedAt?: number;
+	sessionId?: string | null;
 	response?: string;
 	steps?: number;
-	startedAt: number;
-	finishedAt?: number;
+	cancelRequested?: boolean;
 	note?: string;
 }
 
-const hub: {
-	host: AgentTaskHost | null;
-	tasks: Map<string, TaskRecord>;
-	active: { taskId: string; unsubscribe: () => void; startIndex: number } | null;
-} = { host: null, tasks: new Map(), active: null };
+const DELEGATIONS_KEY = "agentDelegations";
+/** A "running" delegation older than this is reported as possibly dead. */
+const STALE_RUNNING_MS = 15 * 60 * 1000;
+/** Delay before the panel navigates to the fresh session; lets the accepted reply flush. */
+const NAVIGATE_DELAY_MS = 150;
 
-/** Called by sidepanel.ts whenever a new Agent instance is created. */
-export function bindAgentTaskHost(host: AgentTaskHost): void {
-	hub.host = host;
+export async function readDelegations(): Promise<Record<string, DelegationRecord>> {
+	const got = await chrome.storage.session.get(DELEGATIONS_KEY);
+	return (got[DELEGATIONS_KEY] as Record<string, DelegationRecord>) || {};
 }
 
-function extractLastAssistantText(messages: any[]): string {
+export async function writeDelegation(rec: DelegationRecord): Promise<void> {
+	const all = await readDelegations();
+	all[rec.taskId] = rec;
+	await chrome.storage.session.set({ [DELEGATIONS_KEY]: all });
+}
+
+/** Claim the oldest pending delegation (called by a freshly-started panel session). */
+export async function takePendingDelegation(): Promise<DelegationRecord | null> {
+	const all = await readDelegations();
+	const pending = Object.values(all).find((d) => d.status === "pending");
+	if (!pending) return null;
+	pending.status = "running";
+	await writeDelegation(pending);
+	return pending;
+}
+
+export function extractLastAssistantText(messages: any[]): string {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const m = messages[i];
 		if (m?.role === "assistant" && Array.isArray(m.content)) {
@@ -56,7 +78,7 @@ function extractLastAssistantText(messages: any[]): string {
 	return "";
 }
 
-function countToolCalls(messages: any[], startIndex: number): number {
+export function countToolCalls(messages: any[], startIndex: number): number {
 	let n = 0;
 	for (let i = startIndex; i < messages.length; i++) {
 		const m = messages[i];
@@ -71,162 +93,127 @@ function countToolCalls(messages: any[], startIndex: number): number {
 const taskSchema = Type.Object({
 	action: Type.Union([Type.Literal("run"), Type.Literal("status"), Type.Literal("cancel")], {
 		description:
-			"run: send a task prompt to the sidepanel agent and wait for its reply. status: poll a task. cancel: abort a running task.",
+			"run: delegate a task to the sidepanel agent (fresh session). status: poll a task. cancel: request cancellation.",
 	}),
 	prompt: Type.Optional(
 		Type.String({
 			description:
-				"(run) The task for the sidepanel agent, in natural language. It can use its injected skills, repl, screenshots and will ask you for confirmations in the side panel when needed.",
+				"(run) The task for the sidepanel agent, self-contained natural language. It auto-loads domain skills, can take screenshots and will ask the user in the side panel when a confirmation is needed.",
 		}),
 	),
-	taskId: Type.Optional(Type.String({ description: "(status/cancel) Task id returned by a previous run" })),
-	timeoutSec: Type.Optional(
-		Type.Number({
-			description:
-				"(run) How long to wait synchronously before returning status=running for polling. Default 90, max 110.",
-		}),
-	),
+	taskId: Type.Optional(Type.String({ description: "(status/cancel) Task id returned by run" })),
 });
 
 type TaskParams = Static<typeof taskSchema>;
 
 interface TaskDetails {
-	status: "done" | "running" | "busy" | "error";
+	status: "accepted" | "pending" | "running" | "done" | "error";
 	taskId?: string;
+	sessionId?: string | null;
 	response?: string;
 	steps?: number;
-	durationMs?: number;
 	note?: string;
+}
+
+function startNewSessionNavigation(): void {
+	setTimeout(() => {
+		const url = new URL(window.location.href);
+		url.search = "?new=true";
+		window.location.href = url.toString();
+	}, NAVIGATE_DELAY_MS);
 }
 
 export class AgentTaskTool implements AgentTool<typeof taskSchema, TaskDetails> {
 	label = "Agent Task";
 	name = "agent_task";
-	description = `Delegate a task to the sitegeist side panel agent and get its reply.
+	description = `Delegate a task to the sitegeist side panel agent as a subagent.
 
-The side panel agent is the browser-native sitegeist assistant: it auto-loads domain skills (e.g. the tianwen monitoring skill), can take screenshots, and can ask the user for confirmations/element picks in the side panel UI. Use it for browser work that benefits from those capabilities; use the granular tools (navigate, repl, ...) when you want step-by-step control instead.
+The panel agent is the browser-native sitegeist assistant: it auto-loads domain skills on matching sites (e.g. the tianwen monitoring skill), can take screenshots, and can ask the user for confirmations/element picks in the side panel UI. Use it for browser work that benefits from those capabilities; use the granular tools (navigate, repl, ...) when you want step-by-step control instead.
 
 Rules:
-- The side panel must be open. The task appears in the panel conversation, so the user can watch and intervene.
-- "run" waits synchronously (default 90s). If the task is still running, you get status=running with a taskId - poll with action=status, or cancel with action=cancel.
-- If the panel agent is already streaming (user chatting), you get status=busy - retry shortly.
-- Keep the prompt self-contained: the agent starts from the panel's current context.`;
+- The side panel must be open. The task runs in a FRESH panel session (the user's current conversation is untouched and the panel switches back afterwards); the task conversation stays in the session list.
+- "run" accepts immediately (status=accepted) and the panel starts working; poll with action=status until status=done, then read the reply. If the panel is mid-conversation the delegation still works; if the panel agent is literally streaming right now, run fails with busy - retry shortly.
+- Keep the prompt self-contained.`;
 
 	parameters = taskSchema;
 
 	async execute(
 		_toolCallId: string,
 		args: TaskParams,
-		signal?: AbortSignal,
+		_signal?: AbortSignal,
 	): Promise<{ content: Array<{ type: "text"; text: string }>; details: TaskDetails }> {
-		const host = hub.host;
-
 		if (args.action === "status") {
 			if (!args.taskId) return this.fail("status requires taskId");
-			const rec = hub.tasks.get(args.taskId);
+			const all = await readDelegations();
+			const rec = all[args.taskId];
 			if (!rec) return this.fail(`Unknown taskId: ${args.taskId}`);
-			return this.pack(
-				rec.status,
-				rec,
-				`Task ${args.taskId}: ${rec.status}${rec.response ? "" : " (no response yet)"}`,
-			);
+			if (rec.status === "running" && Date.now() - rec.createdAt > STALE_RUNNING_MS) {
+				return this.pack(
+					"running",
+					rec,
+					`Task ${args.taskId} has been "running" for over 15 minutes - the panel may have been closed mid-task. Check the side panel session list.`,
+				);
+			}
+			const lines =
+				rec.status === "done"
+					? rec.response || "(agent finished without a text reply)"
+					: `Task ${args.taskId}: ${rec.status}${rec.note ? ` (${rec.note})` : ""}`;
+			return this.pack(rec.status, rec, lines);
 		}
 
 		if (args.action === "cancel") {
 			if (!args.taskId) return this.fail("cancel requires taskId");
-			const rec = hub.tasks.get(args.taskId);
+			const all = await readDelegations();
+			const rec = all[args.taskId];
 			if (!rec) return this.fail(`Unknown taskId: ${args.taskId}`);
-			if (rec.status !== "running") return this.pack(rec.status, rec, `Task already ${rec.status}.`);
-			if (hub.active?.taskId === args.taskId && host) host.abort();
-			return this.pack("running", rec, `Cancel requested for ${args.taskId}; agent aborting, poll status.`);
-		}
-
-		// action === "run"
-		if (!host) return this.fail("Sidepanel agent not ready (panel still initializing?).");
-		if (!args.prompt || !args.prompt.trim()) return this.fail("run requires prompt");
-		if (host.state.isStreaming) {
-			return {
-				content: [
-					{
-						type: "text",
-						text: "Sidepanel agent is busy (streaming). Retry in a moment or use action=status with a previous taskId.",
-					},
-				],
-				details: { status: "busy", note: "panel agent streaming" },
-			};
-		}
-
-		const taskId = crypto.randomUUID();
-		const startIndex = host.state.messages.length;
-		const rec: TaskRecord = { taskId, status: "running", startedAt: Date.now() };
-		hub.tasks.set(taskId, rec);
-
-		const waitMs = Math.min(Math.max(args.timeoutSec ?? 90, 10), 110) * 1000;
-		let resolveWaiter: (() => void) | null = null;
-		const waiter = new Promise<void>((resolve) => {
-			resolveWaiter = resolve;
-		});
-
-		const finish = (note?: string) => {
-			rec.status = "done";
-			rec.response = extractLastAssistantText(host.state.messages) || "(no text reply)";
-			rec.steps = countToolCalls(host.state.messages, startIndex);
-			rec.finishedAt = Date.now();
-			rec.note = note;
-			if (hub.active?.taskId === taskId) {
-				hub.active.unsubscribe();
-				hub.active = null;
+			if (rec.status === "pending") {
+				rec.status = "error";
+				rec.note = "cancelled before start";
+				rec.finishedAt = Date.now();
+				await writeDelegation(rec);
+				return this.pack("error", rec, `Task ${args.taskId} cancelled before the panel started it.`);
 			}
-			resolveWaiter?.();
-		};
-
-		const unsubscribe = host.subscribe((event: { type: string }) => {
-			if (event.type === "agent_end" && hub.active?.taskId === taskId) finish();
-		});
-		hub.active = { taskId, unsubscribe, startIndex };
-
-		host.prompt(args.prompt).catch((err: unknown) => {
-			finish(`prompt failed: ${err instanceof Error ? err.message : String(err)}`);
-		});
-
-		// Wait for completion, tool timeout, or pi-side cancellation.
-		const raceResult = await Promise.race([
-			waiter.then(() => "done" as const),
-			new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), waitMs)),
-			new Promise<"aborted">((resolve) => {
-				if (signal?.aborted) return resolve("aborted");
-				signal?.addEventListener("abort", () => resolve("aborted"), { once: true });
-			}),
-		]);
-
-		if (raceResult === "done") {
+			rec.cancelRequested = true;
+			await writeDelegation(rec);
 			return this.pack(
-				"done",
+				rec.status,
 				rec,
-				rec.note ? `${rec.response}\n\n(note: ${rec.note})` : rec.response || "(no reply)",
+				`Cancellation requested for ${args.taskId}. The panel agent finishes its current step and notes the cancellation; you can also stop it directly in the side panel UI.`,
 			);
 		}
 
-		// Still running: leave it alive in the panel, return polling info.
-		if (raceResult === "aborted") {
-			return {
-				content: [
-					{
-						type: "text",
-						text: `Task ${taskId} is still running in the side panel (you cancelled the wait; the agent keeps working). Poll with action=status.`,
-					},
-				],
-				details: { status: "running", taskId, note: "wait cancelled, agent still running" },
-			};
+		// action === "run"
+		if (!args.prompt || !args.prompt.trim()) return this.fail("run requires prompt");
+
+		const all = await readDelegations();
+		const busyDelegation = Object.values(all).find((d) => d.status === "pending" || d.status === "running");
+		if (busyDelegation) {
+			return this.fail(
+				`Another delegation (${busyDelegation.taskId}, ${busyDelegation.status}) is in flight. Poll its status or cancel it first.`,
+			);
 		}
+
+		const taskId = crypto.randomUUID();
+		const prevSessionId = new URL(window.location.href).searchParams.get("session");
+		const rec: DelegationRecord = {
+			taskId,
+			prompt: args.prompt.trim(),
+			status: "pending",
+			prevSessionId,
+			createdAt: Date.now(),
+		};
+		await writeDelegation(rec);
+
+		startNewSessionNavigation();
+
 		return {
 			content: [
 				{
 					type: "text",
-					text: `Task ${taskId} is still running in the side panel after ${Math.round(waitMs / 1000)}s. Poll with action=status (taskId ${taskId}), or cancel.`,
+					text: `Delegation accepted, taskId=${taskId}. The side panel is switching to a fresh session to execute the task; poll action=status (taskId ${taskId}) until done. The panel will switch back to the previous session when finished.`,
 				},
 			],
-			details: { status: "running", taskId, note: "sync wait exceeded, poll status" },
+			details: { status: "accepted", taskId, sessionId: prevSessionId, note: "panel switching to fresh session" },
 		};
 	}
 
@@ -236,7 +223,7 @@ Rules:
 
 	private pack(
 		status: TaskDetails["status"],
-		rec: TaskRecord,
+		rec: DelegationRecord,
 		text: string,
 	): { content: Array<{ type: "text"; text: string }>; details: TaskDetails } {
 		return {
@@ -244,9 +231,9 @@ Rules:
 			details: {
 				status,
 				taskId: rec.taskId,
+				sessionId: rec.sessionId,
 				response: rec.response,
 				steps: rec.steps,
-				durationMs: rec.finishedAt ? rec.finishedAt - rec.startedAt : undefined,
 				note: rec.note,
 			},
 		};

@@ -71,7 +71,13 @@ import { isOAuthCredentials, resolveApiKey } from "./oauth/index.js";
 import { SYSTEM_PROMPT } from "./prompts/prompts.js";
 import { SitegeistAppStorage } from "./storage/app-storage.js";
 import { AgentSchedulerTool, registerAgentSchedulerRenderer } from "./tools/agent-scheduler.js";
-import { bindAgentTaskHost } from "./tools/agent-task.js";
+import {
+	countToolCalls,
+	type DelegationRecord,
+	extractLastAssistantText,
+	takePendingDelegation,
+	writeDelegation,
+} from "./tools/agent-task.js";
 import { BookmarksTool, registerBookmarksRenderer } from "./tools/bookmarks.js";
 import { BrowserExtensionsTool, registerBrowserExtensionsRenderer } from "./tools/browser-extensions.js";
 import { BrowserWorkspaceTool, registerBrowserWorkspaceRenderer } from "./tools/browser-workspace.js";
@@ -882,9 +888,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			if (!agent) return;
 			SessionCostDialog.open(agent.state.messages);
 		},
-		toolsFactory: (agent, _agentInterface, _artifactsPanel, runtimeProvidersFactory) => {
-			// The MCP agent_task tool delegates to whichever Agent instance is live here.
-			bindAgentTaskHost(agent);
+		toolsFactory: (_agent, _agentInterface, _artifactsPanel, runtimeProvidersFactory) => {
 			const navigateTool = new NavigateTool();
 			const selectElementTool = new AskUserWhichElementTool();
 
@@ -979,6 +983,43 @@ const newSession = () => {
 	url.search = "?new=true";
 	window.location.href = url.toString();
 };
+
+/**
+ * Execute a delegated agent_task in the current fresh session, persist the
+ * result for MCP status polling, then navigate back to the previous session.
+ */
+async function runDelegatedAgentTask(
+	hostAgent: NonNullable<typeof agent>,
+	delegation: DelegationRecord,
+): Promise<void> {
+	try {
+		const startIndex = hostAgent.state.messages.length;
+		await hostAgent.prompt(delegation.prompt);
+		delegation.response = extractLastAssistantText(hostAgent.state.messages) || "(no text reply)";
+		delegation.steps = countToolCalls(hostAgent.state.messages, startIndex);
+		delegation.sessionId = currentSessionId;
+		delegation.status = "done";
+		delegation.finishedAt = Date.now();
+		if (delegation.cancelRequested) {
+			delegation.note = "cancellation was requested while running; agent completed the current run";
+		}
+		await writeDelegation(delegation);
+	} catch (err) {
+		delegation.status = "error";
+		delegation.note = err instanceof Error ? err.message : String(err);
+		delegation.finishedAt = Date.now();
+		delegation.sessionId = currentSessionId;
+		await writeDelegation(delegation);
+		renderApp();
+		return; // stay in the task session so the user can see the error
+	}
+	// Switch back to the previous session (page navigation, same as loadSession)
+	if (delegation.prevSessionId) {
+		loadSession(delegation.prevSessionId);
+	} else {
+		renderApp();
+	}
+}
 
 // ============================================================================
 // RENDER
@@ -1534,8 +1575,17 @@ async function initApp() {
 		}
 	}
 
-	// No session - create new agent with welcome message
+	// No session - create new agent
 	await createAgent();
+	renderApp();
+
+	// Delegated task from MCP agent_task: run it in this fresh session, then
+	// navigate back to the previous session. Skips welcome/first-run dialogs.
+	const delegation = await takePendingDelegation();
+	if (delegation && agent) {
+		await runDelegatedAgentTask(agent, delegation);
+		return;
+	}
 
 	// Add welcome message for new sessions
 	if (agent) {
