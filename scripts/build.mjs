@@ -23,6 +23,19 @@ const entryPoints = {
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
+// Dev-only hot reload must not ship in production builds: it retries a WebSocket
+// to the dev server forever, spamming the console every 2 seconds. Stub it out
+// unless this is a --watch (dev) build.
+const liveReloadStubPlugin = {
+	name: "live-reload-stub",
+	setup(pluginBuild) {
+		pluginBuild.onLoad({ filter: /utils[\\/]live-reload\.ts$/ }, () => {
+			if (isWatch) return undefined;
+			return { contents: "// dev-only module, stubbed out in production build", loader: "js" };
+		});
+	},
+};
+
 const buildOptions = {
 	absWorkingDir: packageRoot,
 	entryPoints,
@@ -43,6 +56,7 @@ const buildOptions = {
 		global: "globalThis",
 	},
 	inject: [join(packageRoot, "scripts/process-shim.js")],
+	plugins: [liveReloadStubPlugin],
 	// Force all mini-lit and lit imports to resolve to sitegeist's node_modules
 	alias: {
 		process: join(packageRoot, "scripts/process-shim.js"),
