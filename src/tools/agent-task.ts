@@ -43,14 +43,14 @@ const STALE_RUNNING_MS = 15 * 60 * 1000;
 const NAVIGATE_DELAY_MS = 150;
 
 export async function readDelegations(): Promise<Record<string, DelegationRecord>> {
-	const got = await chrome.storage.session.get(DELEGATIONS_KEY);
+	const got = await chrome.storage.local.get(DELEGATIONS_KEY);
 	return (got[DELEGATIONS_KEY] as Record<string, DelegationRecord>) || {};
 }
 
 export async function writeDelegation(rec: DelegationRecord): Promise<void> {
 	const all = await readDelegations();
 	all[rec.taskId] = rec;
-	await chrome.storage.session.set({ [DELEGATIONS_KEY]: all });
+	await chrome.storage.local.set({ [DELEGATIONS_KEY]: all });
 }
 
 /** Claim the oldest pending delegation (called by a freshly-started panel session). */
