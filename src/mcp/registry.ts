@@ -13,6 +13,7 @@ import { NativeInputEventsRuntimeProvider } from "../tools/NativeInputEventsRunt
 import { NavigateTool } from "../tools/navigate.js";
 import { createReplTool } from "../tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "../tools/repl/runtime-providers.js";
+import { SetupTool } from "../tools/setup.js";
 
 /**
  * Tools exposed over the MCP bridge, in addition to the tool instance an
@@ -77,6 +78,7 @@ export async function createMcpToolEntries(): Promise<McpToolEntry[]> {
 		{ tool: new BrowserWorkspaceTool() },
 		{ tool: new AgentSchedulerTool() },
 		{ tool: new AgentTaskTool() },
+		{ tool: new SetupTool() },
 		{ tool: skillTool },
 	];
 

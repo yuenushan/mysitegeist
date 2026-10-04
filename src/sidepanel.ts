@@ -53,6 +53,7 @@ import { McpTab } from "./dialogs/McpTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
 import { SessionTreeDialog } from "./dialogs/SessionTreeDialog.js";
+import { SetupWizard } from "./dialogs/SetupWizard.js";
 import { SkillsTab } from "./dialogs/SkillsTab.js";
 import { UpdateNotificationDialog } from "./dialogs/UpdateNotificationDialog.js";
 import { UserScriptsPermissionDialog } from "./dialogs/UserScriptsPermissionDialog.js";
@@ -88,6 +89,7 @@ import { NativeInputEventsRuntimeProvider } from "./tools/NativeInputEventsRunti
 import { isToolNavigating, NavigateTool } from "./tools/navigate.js";
 import { createReplTool } from "./tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "./tools/repl/runtime-providers.js";
+import { SetupTool } from "./tools/setup.js";
 import { buildSessionExportHtml } from "./utils/export-html.js";
 import * as port from "./utils/port.js";
 import "./utils/i18n-extension.js";
@@ -924,6 +926,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			const browserWorkspaceTool = new BrowserWorkspaceTool();
 			const schedulerTool = new AgentSchedulerTool();
 
+			const setupTool = new SetupTool();
 			const tools: AgentTool<any, any>[] = [
 				navigateTool,
 				selectElementTool,
@@ -935,6 +938,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				browserExtensionsTool,
 				browserWorkspaceTool,
 				schedulerTool,
+				setupTool,
 			];
 
 			// Conditionally add debugger tool if enabled
