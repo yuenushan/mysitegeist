@@ -365,7 +365,13 @@ export class SkillsTab extends SettingsTab {
 						checked: this.networkEnabled,
 						onChange: async (checked: boolean) => {
 							this.networkEnabled = checked;
-							await getSitegeistStorage().settings.set("browserjs.network", checked);
+							try {
+								await getSitegeistStorage().settings.set("browserjs.network", checked);
+							} catch (error) {
+								console.error("Failed to save network consent:", error);
+								Toast.error("Failed to save network consent");
+							}
+							this.requestUpdate(); // SkillsTab 不走 lit 响应式，受控开关需手动重渲染
 						},
 					})}
 				</div>
