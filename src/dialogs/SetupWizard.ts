@@ -73,7 +73,6 @@ export class SetupWizard extends DialogBase {
 	@state() private provider: string | null = null;
 	@state() private apiKey = "";
 	@state() private baseUrl = "";
-	@state() private model = "";
 	@state() private testing = false;
 	@state() private testResult: "ok" | "fail" | null = null;
 	@state() private testMessage = "";

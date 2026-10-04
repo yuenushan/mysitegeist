@@ -53,7 +53,6 @@ import { McpTab } from "./dialogs/McpTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
 import { SessionTreeDialog } from "./dialogs/SessionTreeDialog.js";
-import { SetupWizard } from "./dialogs/SetupWizard.js";
 import { SkillsTab } from "./dialogs/SkillsTab.js";
 import { UpdateNotificationDialog } from "./dialogs/UpdateNotificationDialog.js";
 import { UserScriptsPermissionDialog } from "./dialogs/UserScriptsPermissionDialog.js";

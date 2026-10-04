@@ -1,5 +1,4 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { getModel, getModels, type Model } from "@mariozechner/pi-ai";
 import { type Static, Type } from "@sinclair/typebox";
 import { getSitegeistStorage } from "../storage/app-storage.js";
 
@@ -199,12 +198,6 @@ The user never needs to open Settings — you write the config for them.`;
 			case "set_default_model": {
 				if (!args.provider || !args.model)
 					return text("Error: set_default_model requires provider and model.", { action: "set_default_model" });
-				const model = getModel(args.provider as any, args.model);
-				if (!model)
-					return text(`Model ${args.model} not found for provider ${args.provider}.`, {
-						action: "set_default_model",
-						note: "model not found",
-					});
 				const key = await storage.providerKeys.get(args.provider);
 				if (!key)
 					return text(`No key for ${args.provider} — set_provider_key first.`, {
