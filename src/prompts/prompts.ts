@@ -336,6 +336,8 @@ Navigate to URLs and manage tabs.
 ## Returns
 Final URL, page title, tab ID, and available skills.
 
+Fails with the network error (e.g. net::ERR_CONNECTION_TIMED_OUT) when the page cannot load, or times out after 30s; do not retry the same URL more than once, pick a different source instead.
+
 ## Critical
 Use this tool for ALL navigation. NEVER use window.location, history.back/forward, or any navigation code in repl.
 Do not use navigation to fetch data from API/JSON endpoints - use http() in repl instead (navigating to them hangs or triggers downloads).`;

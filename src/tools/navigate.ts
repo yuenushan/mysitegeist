@@ -60,6 +60,94 @@ export interface NavigateResult {
 }
 
 // ============================================================================
+// NAVIGATION WAIT HELPER
+// ============================================================================
+
+const NAVIGATION_TIMEOUT_MS = 30_000;
+
+function sameUrlIgnoringProtocol(a: string, b: string): boolean {
+	return a.replace(/^https?:\/\//, "") === b.replace(/^https?:\/\//, "");
+}
+
+/**
+ * Waits for a tab's main frame to reach DOMContentLoaded.
+ *
+ * Rejects instead of hanging forever when the navigation fails: main-frame
+ * network errors (e.g. net::ERR_CONNECTION_TIMED_OUT) never fire
+ * DOMContentLoaded, so a listener-only implementation would block the tool
+ * call indefinitely. A hard timeout backstops hangs where no error event
+ * ever arrives.
+ */
+function waitForPageLoad(
+	tabId: number,
+	expectedUrl: string,
+	signal: AbortSignal | undefined,
+	start: () => Promise<void>,
+): Promise<string> {
+	return new Promise((resolve, reject) => {
+		if (signal?.aborted) {
+			reject(new Error("Aborted"));
+			return;
+		}
+
+		let settled = false;
+
+		const cleanup = () => {
+			chrome.webNavigation.onDOMContentLoaded.removeListener(onDomContentLoaded);
+			chrome.webNavigation.onErrorOccurred.removeListener(onError);
+			clearTimeout(timeoutId);
+			signal?.removeEventListener("abort", onAbort);
+		};
+		const settle = (fn: () => void) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			fn();
+		};
+
+		const onDomContentLoaded = (details: chrome.webNavigation.WebNavigationFramedCallbackDetails) => {
+			if (details.tabId !== tabId || details.frameId !== 0) return;
+			// Some Chrome versions fire DOMContentLoaded for built-in error pages; never resolve with a chrome-error URL
+			if (details.url.startsWith("chrome-error://")) {
+				settle(() => reject(new Error(`Navigation failed: could not load ${expectedUrl}`)));
+				return;
+			}
+			settle(() => resolve(details.url));
+		};
+
+		const onError = (details: chrome.webNavigation.WebNavigationFramedErrorCallbackDetails) => {
+			if (details.tabId !== tabId || details.frameId !== 0) return;
+			// Replacing an in-flight navigation to a different URL aborts it (net::ERR_ABORTED);
+			// only fail on errors for the URL we asked for
+			if (details.error === "net::ERR_ABORTED" && !sameUrlIgnoringProtocol(details.url, expectedUrl)) {
+				return;
+			}
+			settle(() => reject(new Error(`Navigation failed: ${details.error}`)));
+		};
+
+		const onAbort = () => settle(() => reject(new Error("Aborted")));
+
+		const timeoutId = setTimeout(() => {
+			settle(() =>
+				reject(
+					new Error(
+						`Navigation timed out after ${NAVIGATION_TIMEOUT_MS / 1000}s: ${expectedUrl} did not finish loading (host may be unreachable or blocked by the network)`,
+					),
+				),
+			);
+		}, NAVIGATION_TIMEOUT_MS);
+
+		chrome.webNavigation.onDOMContentLoaded.addListener(onDomContentLoaded);
+		chrome.webNavigation.onErrorOccurred.addListener(onError);
+		signal?.addEventListener("abort", onAbort);
+
+		start().catch((err: unknown) => {
+			settle(() => reject(err instanceof Error ? err : new Error(String(err))));
+		});
+	});
+}
+
+// ============================================================================
 // TOOL
 // ============================================================================
 
@@ -176,43 +264,8 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 	}
 
 	private async navigateToUrl(tabId: number, url: string, signal?: AbortSignal): Promise<string> {
-		return new Promise((resolve, reject) => {
-			if (signal?.aborted) {
-				reject(new Error("Aborted"));
-				return;
-			}
-
-			// Set up DOMContentLoaded listener (fires when DOM is ready, more reliable than onCompleted)
-			const listener = (details: chrome.webNavigation.WebNavigationFramedCallbackDetails) => {
-				if (details.tabId === tabId && details.frameId === 0) {
-					chrome.webNavigation.onDOMContentLoaded.removeListener(listener);
-					if (abortListener) signal?.removeEventListener("abort", abortListener);
-					resolve(details.url);
-				}
-			};
-
-			// Set up abort listener
-			const abortListener = () => {
-				if (chrome.webNavigation?.onDOMContentLoaded) {
-					chrome.webNavigation.onDOMContentLoaded.removeListener(listener);
-				}
-				reject(new Error("Aborted"));
-			};
-
-			if (signal) {
-				signal.addEventListener("abort", abortListener);
-			}
-
-			chrome.webNavigation.onDOMContentLoaded.addListener(listener);
-
-			// Trigger navigation
-			chrome.tabs.update(tabId, { url }).catch((err: Error) => {
-				if (chrome.webNavigation?.onDOMContentLoaded) {
-					chrome.webNavigation.onDOMContentLoaded.removeListener(listener);
-				}
-				if (abortListener) signal?.removeEventListener("abort", abortListener);
-				reject(err);
-			});
+		return waitForPageLoad(tabId, url, signal, async () => {
+			await chrome.tabs.update(tabId, { url });
 		});
 	}
 
@@ -227,34 +280,7 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 			throw new Error("Failed to create new tab");
 		}
 
-		// Wait for the tab to load
-		return new Promise((resolve, reject) => {
-			if (signal?.aborted) {
-				reject(new Error("Aborted"));
-				return;
-			}
-
-			const listener = (details: chrome.webNavigation.WebNavigationFramedCallbackDetails) => {
-				if (details.tabId === newTab.id && details.frameId === 0) {
-					chrome.webNavigation.onDOMContentLoaded.removeListener(listener);
-					if (abortListener) signal?.removeEventListener("abort", abortListener);
-					resolve(details.url);
-				}
-			};
-
-			const abortListener = () => {
-				if (chrome.webNavigation?.onDOMContentLoaded) {
-					chrome.webNavigation.onDOMContentLoaded.removeListener(listener);
-				}
-				reject(new Error("Aborted"));
-			};
-
-			if (signal) {
-				signal.addEventListener("abort", abortListener);
-			}
-
-			chrome.webNavigation.onDOMContentLoaded.addListener(listener);
-		});
+		return waitForPageLoad(newTab.id, url, signal, async () => {});
 	}
 
 	private async listTabs(): Promise<{ content: Array<{ type: "text"; text: string }>; details: NavigateResult }> {

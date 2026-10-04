@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- navigate hung forever when the target page never loaded: the wait was DOMContentLoaded-only with no onErrorOccurred listener and no timeout, so an unreachable host (e.g. net::ERR_CONNECTION_TIMED_OUT) left the tool call spinning indefinitely and wedged the agent run (observed with a blocked fandom.com wiki). Navigation now fails fast with the actual network error, a 30s hard timeout backstops hangs with no error event, error-page DOMContentLoaded events (chrome-error://) resolve as failures instead of succeeding with a chrome-error URL, and the tool description tells the agent to switch sources instead of retrying
 - Setup tool's set_default_model saved lastUsedModel as a bare { provider, id } pair; restoring it handed the agent a model without api/baseUrl, so every message failed with "No API provider registered for api: undefined". It now persists a complete Model: known providers resolve via the built-in registry, custom/proxy providers synthesize an OpenAI-compatible record from the configured base URL. All model sources (session restore, saved default, provider-key defaults) now pass through the same normalization in createAgent - sessions created while a corrupt model was active also heal on load - and the repaired model is written back to the stored default. set_provider_key now persists its baseUrl argument (previously only echoed it back), test_provider falls back to the persisted base URL, and setup status shows configured base URLs
 
 ### Added
