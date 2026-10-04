@@ -1,6 +1,8 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { getModel, type Model } from "@mariozechner/pi-ai";
 import { type Static, Type } from "@sinclair/typebox";
 import { getSitegeistStorage } from "../storage/app-storage.js";
+import { buildCustomModel } from "../utils/model-utils.js";
 
 const DEFAULT_MODELS: Record<string, string> = {
 	anthropic: "claude-sonnet-4-6",
@@ -138,15 +140,20 @@ The user never needs to open Settings — you write the config for them.`;
 			case "status": {
 				const providers = PROVIDER_CATALOG.map((p) => p.id);
 				const configured: string[] = [];
+				const baseUrls: string[] = [];
 				for (const p of providers) {
 					const key = await storage.providerKeys.get(p);
-					if (key) configured.push(p);
+					if (key) {
+						configured.push(p);
+						const baseUrl = await storage.settings.get<string>("customProvider.baseUrl." + p);
+						if (baseUrl) baseUrls.push(`${p}: ${baseUrl}`);
+					}
 				}
 				const model = await storage.settings.get("lastUsedModel");
 				const userScripts = typeof chrome.userScripts !== "undefined";
 				const networkSkills = (await storage.settings.get<boolean>("browserjs.network")) === true;
 				return text(
-					`Setup status:\n- Providers with keys: ${configured.length ? configured.join(", ") : "NONE"}\n- Default model: ${model ? JSON.stringify(model) : "not set"}\n- userScripts API: ${userScripts ? "available" : "NOT available"}\n- Skill network access: ${networkSkills ? "enabled" : "disabled (default)"}`,
+					`Setup status:\n- Providers with keys: ${configured.length ? configured.join(", ") : "NONE"}\n- Base URLs: ${baseUrls.length ? baseUrls.join(", ") : "none"}\n- Default model: ${model ? JSON.stringify(model) : "not set"}\n- userScripts API: ${userScripts ? "available" : "NOT available"}\n- Skill network access: ${networkSkills ? "enabled" : "disabled (default)"}`,
 					{
 						action: "status",
 						configured: configured.length > 0,
@@ -173,6 +180,9 @@ The user never needs to open Settings — you write the config for them.`;
 						note: "missing params",
 					});
 				await storage.providerKeys.set(args.provider, args.key);
+				if (args.baseUrl) {
+					await storage.settings.set("customProvider.baseUrl." + args.provider, args.baseUrl);
+				}
 				const info = PROVIDER_CATALOG.find((p) => p.id === args.provider);
 				return text(
 					`✓ API key saved for ${info?.name || args.provider}${args.baseUrl ? ` (base URL: ${args.baseUrl})` : ""}.\nUse test_provider to verify, or set_default_model to pick a model.`,
@@ -187,7 +197,8 @@ The user never needs to open Settings — you write the config for them.`;
 						action: "test_provider",
 						note: "no key",
 					});
-				const result = await testProviderKey(args.provider, key, args.baseUrl);
+				const persistedBaseUrl = await storage.settings.get<string>("customProvider.baseUrl." + args.provider);
+				const result = await testProviderKey(args.provider, key, args.baseUrl || persistedBaseUrl || undefined);
 				return text(
 					result.ok
 						? `✓ ${args.provider} key verified. The agent can use this provider.`
@@ -204,10 +215,25 @@ The user never needs to open Settings — you write the config for them.`;
 						action: "set_default_model",
 						note: "no key",
 					});
-				await storage.settings.set("lastUsedModel", { provider: args.provider, id: args.model });
-				return text(`✓ Default model set to ${args.model} (${args.provider}).`, {
+				// The stored model must be a complete pi-ai Model (api, baseUrl, ...).
+				// Saving a bare { provider, id } pair makes stream() fail with
+				// "No API provider registered for api: undefined".
+				let model: Model<any> | undefined = getModel(args.provider as any, args.model);
+				if (!model) {
+					const baseUrl =
+						args.baseUrl || (await storage.settings.get<string>("customProvider.baseUrl." + args.provider)) || "";
+					if (!baseUrl) {
+						return text(
+							`Error: ${args.provider} is not a known provider and no base URL is configured. Call set_provider_key with baseUrl first.`,
+							{ action: "set_default_model", note: "missing baseUrl" },
+						);
+					}
+					model = buildCustomModel(args.provider, args.model, baseUrl);
+				}
+				await storage.settings.set("lastUsedModel", model);
+				return text(`✓ Default model set to ${model.id} (${model.provider}).`, {
 					action: "set_default_model",
-					model: args.model,
+					model: model.id,
 					note: "saved",
 				});
 			}

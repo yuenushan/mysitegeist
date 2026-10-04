@@ -90,6 +90,7 @@ import { createReplTool } from "./tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "./tools/repl/runtime-providers.js";
 import { SetupTool } from "./tools/setup.js";
 import { buildSessionExportHtml } from "./utils/export-html.js";
+import { normalizeStoredModel } from "./utils/model-utils.js";
 import * as port from "./utils/port.js";
 import "./utils/i18n-extension.js";
 import "./utils/live-reload.js";
@@ -668,40 +669,60 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 	const corsProxyEnabled = await storage.settings.get<boolean>("proxy.enabled");
 	const corsProxyUrl = await storage.settings.get<string>("proxy.url");
 
-	// Determine default model: saved > default for a provider with key > gemini flash fallback
-	let defaultModel: Model<any> | undefined;
-	if (!initialState?.model) {
+	// Resolve the model to use: session state > saved default > provider-key default > fallback.
+	// Every source passes through normalizeStoredModel: legacy sessions/settings may hold bare
+	// { provider, id } records (older set_default_model), which would fail at stream time with
+	// "No API provider registered for api: undefined".
+	const resolveCustomBaseUrl = (provider: string) =>
+		storage.settings.get<string>("customProvider.baseUrl." + provider);
+	let model: Model<any> | undefined;
+	if (initialState?.model) {
+		model = await normalizeStoredModel(initialState.model, resolveCustomBaseUrl);
+	}
+	if (!model) {
 		const savedModel = await storage.settings.get<Model<any>>("lastUsedModel");
 		if (savedModel) {
-			defaultModel = savedModel;
-		} else {
-			// Try to find a default model for a provider the user already has a key for
-			const providersWithKeys = await getProvidersWithKeys();
-			for (const provider of providersWithKeys) {
-				const modelId = DEFAULT_MODELS[provider];
-				if (modelId) {
-					const model = getModel(provider as any, modelId);
-					if (model) {
-						defaultModel = model;
-						break;
-					}
+			model = await normalizeStoredModel(savedModel, resolveCustomBaseUrl);
+		}
+	}
+	if (!model) {
+		// Try to find a default model for a provider the user already has a key for
+		const providersWithKeys = await getProvidersWithKeys();
+		for (const provider of providersWithKeys) {
+			const modelId = DEFAULT_MODELS[provider];
+			if (modelId) {
+				const known = getModel(provider as any, modelId);
+				if (known) {
+					model = known;
+					break;
 				}
 			}
 		}
 	}
 	// Final fallback
-	if (!defaultModel && !initialState?.model) {
-		defaultModel = getModel("anthropic", "claude-sonnet-4-6");
+	if (!model) {
+		model = getModel("anthropic", "claude-sonnet-4-6");
 	}
 
-	agent = new Agent({
-		initialState: initialState || {
+	if (initialState) {
+		// Healed model replaces whatever partial record the session carried
+		initialState.model = model;
+	} else {
+		initialState = {
 			systemPrompt: SYSTEM_PROMPT,
-			model: defaultModel,
+			model,
 			thinkingLevel: "medium",
 			messages: [],
 			tools: [],
-		},
+		};
+	}
+	// Persist the repaired model so the stored default stops being the legacy bare pair
+	if (shouldSave && model) {
+		storage.settings.set("lastUsedModel", model).catch((err) => console.error("Failed to save lastUsedModel:", err));
+	}
+
+	agent = new Agent({
+		initialState,
 		convertToLlm: browserMessageTransformer,
 		toolExecution: "sequential",
 		streamFn: createStreamFn(async () => {

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Setup tool's set_default_model saved lastUsedModel as a bare { provider, id } pair; restoring it handed the agent a model without api/baseUrl, so every message failed with "No API provider registered for api: undefined". It now persists a complete Model: known providers resolve via the built-in registry, custom/proxy providers synthesize an OpenAI-compatible record from the configured base URL. All model sources (session restore, saved default, provider-key defaults) now pass through the same normalization in createAgent - sessions created while a corrupt model was active also heal on load - and the repaired model is written back to the stored default. set_provider_key now persists its baseUrl argument (previously only echoed it back), test_provider falls back to the persisted base URL, and setup status shows configured base URLs
+
 ### Added
 - Network-enabled user script world for skills: skills can declare `network: true` (optionally `allowedHosts`) and run in a dedicated user script world with network access, while the default world stays fully offline (connect-src 'none'). Gated by an explicit consent switch in Settings > Skills; the fetch shadow enforces the host allowlist (best-effort against accidents). kdev skill migrated back to sitegeist on this path (API-direct personalView queries with SSO)
 
