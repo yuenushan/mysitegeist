@@ -25,6 +25,7 @@
 - Navigation events are now activity-gated: while the agent is streaming, navigations are only steered into the run if the user interacted within the activity timeout (default 5 minutes, configurable), preventing a walked-away-from run from being extended into an endless nav-chasing loop; while idle, navigations are recorded silently and never trigger a response unless "Browse follow" is enabled (default off, new Browsing settings tab)
 
 ### Fixed
+- kdev skill reverted out of sitegeist defaults: deeper testing showed userScripts USER_SCRIPT world fetch is blocked at the network layer even with a permissive configureWorld CSP (connect-src *), so API-direct skills cannot run in the browserjs sandbox regardless of the network world - kdev stays as a pi-side skill (ks-cookie path, verified working). Recorded as a platform constraint: API-direct skills belong to pi-side skills, DOM-extraction skills to sitegeist
 - browserjs `# Changelog
 
 ## [Unreleased]
