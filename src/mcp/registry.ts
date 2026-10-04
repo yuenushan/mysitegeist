@@ -11,6 +11,7 @@ import { ExtractImageTool } from "../tools/extract-image.js";
 import { skillTool } from "../tools/index.js";
 import { NativeInputEventsRuntimeProvider } from "../tools/NativeInputEventsRuntimeProvider.js";
 import { NavigateTool } from "../tools/navigate.js";
+import { HttpRuntimeProvider } from "../tools/repl/http.js";
 import { createReplTool } from "../tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "../tools/repl/runtime-providers.js";
 import { SetupTool } from "../tools/setup.js";
@@ -46,7 +47,8 @@ export async function createMcpToolEntries(): Promise<McpToolEntry[]> {
 	// Same provider shape as the sidepanel agent, minus the ChatPanel-owned
 	// attachment/artifact providers, which do not exist in the MCP path.
 	replTool.runtimeProvidersFactory = () => {
-		const pageProviders = [new NativeInputEventsRuntimeProvider()];
+		const httpProvider = new HttpRuntimeProvider();
+		const pageProviders = [new NativeInputEventsRuntimeProvider(), httpProvider];
 		return [...pageProviders, new BrowserJsRuntimeProvider(pageProviders), new NavigateRuntimeProvider(navigateTool)];
 	};
 

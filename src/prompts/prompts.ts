@@ -233,6 +233,59 @@ await browserjs(() => {
 `;
 
 // ============================================================================
+// HTTP Runtime Provider
+// ============================================================================
+
+export const HTTP_RUNTIME_PROVIDER_DESCRIPTION = `
+### HTTP
+
+Send HTTP(S) requests from your code - the way to call site APIs (JSON endpoints) without opening tabs.
+
+#### When to Use
+- Reading data the page's DOM does not show: site JSON APIs, paged APIs, data files
+- POSTing data (forms, JSON payloads) to an API
+
+#### Do NOT Use For
+- Navigating the user's browser (use navigate() / navigate tool) - NEVER navigate to an API URL to "read" it; navigating to JSON endpoints hangs or triggers a download. Use http() instead
+- DOM access (use browserjs())
+
+#### Safety Model
+- Same registrable domain as the active tab: sent automatically
+- Different domain: the user is asked once per origin, remembered for this session; denial throws an error
+- Cookies for the target site are included by default (the request is sent by the extension with credentials), so site APIs see you as logged in. Pass { cookies: false } to omit them
+
+#### Function
+\`await http(url, options)\` returns an object:
+- url (final URL after redirects), status, ok, headers (lower-cased names), contentType
+- body (response text), json (parsed JSON when the response is JSON, else undefined)
+- size (bytes received), truncated (true when the response exceeded maxBytes and was cut off)
+
+Options (all optional):
+- method: "GET" (default), "POST", "PUT", "PATCH", "DELETE", ...
+- headers: object of request headers
+- body: string request body (ignored for GET/HEAD)
+- timeoutMs: default 30000, max 120000
+- maxBytes: response size cap in bytes, default 2097152 (2 MB), max 10485760 (10 MB)
+- cookies: include site cookies (default true)
+- referer / origin: override the Referer / Origin header for this request (useful when a site API validates them)
+
+#### Example
+\`\`\`javascript
+// Fetch a site API and use the parsed JSON
+const res = await http('https://api.bilibili.com/x/web-interface/view?bvid=BV1goHq6LECk');
+if (res.ok) console.log(res.json.data.title, res.json.data.cid);
+
+// POST JSON
+const created = await http('https://api.example.com/v1/notes', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ title: 'hello' }),
+});
+console.log(created.status, created.json);
+\`\`\`
+`;
+
+// ============================================================================
 // Navigate Runtime Provider
 // ============================================================================
 
@@ -284,7 +337,8 @@ Navigate to URLs and manage tabs.
 Final URL, page title, tab ID, and available skills.
 
 ## Critical
-Use this tool for ALL navigation. NEVER use window.location, history.back/forward, or any navigation code in repl.`;
+Use this tool for ALL navigation. NEVER use window.location, history.back/forward, or any navigation code in repl.
+Do not use navigation to fetch data from API/JSON endpoints - use http() in repl instead (navigating to them hangs or triggers downloads).`;
 
 // ============================================================================
 // Ask User Which Element Tool
@@ -315,13 +369,15 @@ Execute JavaScript with access to the user's current page and all browser capabi
 
 ## When to Use
 - **Read or interact with current page** - Extract data, click elements, fill forms via browserjs()
+- **Call site APIs over HTTP** - Fetch JSON/data the DOM does not show via http() (cookies included; same-site auto-allowed, cross-site asks the user)
 - **Process data** - User attachments (CSV, Excel, images), calculations, transformations
 - **Generate artifacts** - Charts, images, processed files as intermediate or final outputs
 - **Multi-page workflows** - Navigate and scrape across multiple pages in loops
 
 ## Environment
 - ES2023+ JavaScript (async/await, optional chaining, nullish coalescing, etc.)
-- All browser APIs: DOM, Canvas, WebGL, Fetch, Web Workers, WebSockets, Crypto, etc.
+- All browser APIs: DOM, Canvas, WebGL, Web Workers, Crypto, etc.
+- Network: use http() for HTTP requests (sandbox fetch() itself is CSP-blocked; browserjs() page fetch() is blocked too)
 - Import any npm package: await import('https://esm.run/package-name')
 - Clean sandbox (no page access unless using browserjs())
 - 120 second timeout
@@ -373,6 +429,7 @@ await createOrUpdateArtifact('products.json', products);
 \`\`\`
 
 ## Important Notes
+- Site data (APIs, JSON): use http() - NEVER navigate to API/data URLs to read their content; such navigations hang or trigger downloads. Navigation is for pages the user should SEE
 - Graphics: Use fixed dimensions (800x600), NOT window.innerWidth/Height
 - Chart.js: Set options: { responsive: false, animation: false }
 - Three.js: renderer.setSize(800, 600) with matching aspect ratio

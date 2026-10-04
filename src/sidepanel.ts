@@ -86,6 +86,7 @@ import { ExtractImageTool, registerExtractImageRenderer } from "./tools/extract-
 import { AskUserWhichElementTool, skillTool } from "./tools/index.js";
 import { NativeInputEventsRuntimeProvider } from "./tools/NativeInputEventsRuntimeProvider.js";
 import { isToolNavigating, NavigateTool } from "./tools/navigate.js";
+import { HttpRuntimeProvider } from "./tools/repl/http.js";
 import { createReplTool } from "./tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "./tools/repl/runtime-providers.js";
 import { SetupTool } from "./tools/setup.js";
@@ -925,10 +926,12 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 
 			// Extend base providers with browser orchestration capabilities
 			replTool.runtimeProvidersFactory = () => {
+				const httpProvider = new HttpRuntimeProvider();
 				// Providers that should be available in page context via browserjs()
 				const pageProviders = [
 					...runtimeProvidersFactory(), // attachments + artifacts from ChatPanel
 					new NativeInputEventsRuntimeProvider(), // trusted browser events
+					httpProvider, // http() also available inside browserjs() (routed back here)
 				];
 
 				return [

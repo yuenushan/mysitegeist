@@ -127,6 +127,17 @@ declare module "@mariozechner/mini-lit" {
 		"A new version ({version}) is available. Please update to continue.": string;
 		"Update Now": string;
 
+		// HTTP cross-site confirm dialog
+		"Allow request to this origin?": string;
+		"Sitegeist's agent wants to send an HTTP request to a different site than the one you are viewing.": string;
+		"Cross-site requests can carry your login session for that site, so the remote server sees the request as coming from you. Only allow origins you trust.": string;
+		"Request origin:": string;
+		"Active tab:": string;
+		unknown: string;
+		"If you allow it, this origin is remembered for the rest of this session.": string;
+		Deny: string;
+		Allow: string;
+
 		// MCP bridge settings tab
 		"MCP Bridge": string;
 		Connected: string;
@@ -293,6 +304,20 @@ const sitegeistTranslations = {
 		"Continue from here": "Continue from here",
 		"Onward branches at this point": "Onward branches at this point",
 		branches: "branches",
+
+		// HTTP cross-site confirm dialog
+		"Allow request to this origin?": "Allow request to this origin?",
+		"Sitegeist's agent wants to send an HTTP request to a different site than the one you are viewing.":
+			"Sitegeist's agent wants to send an HTTP request to a different site than the one you are viewing.",
+		"Cross-site requests can carry your login session for that site, so the remote server sees the request as coming from you. Only allow origins you trust.":
+			"Cross-site requests can carry your login session for that site, so the remote server sees the request as coming from you. Only allow origins you trust.",
+		"Request origin:": "Request origin:",
+		"Active tab:": "Active tab:",
+		unknown: "unknown",
+		"If you allow it, this origin is remembered for the rest of this session.":
+			"If you allow it, this origin is remembered for the rest of this session.",
+		Deny: "Deny",
+		Allow: "Allow",
 	},
 	de: {
 		"Permission request failed": "Berechtigungsanfrage fehlgeschlagen",
@@ -443,6 +468,20 @@ const sitegeistTranslations = {
 		"To register the bridge with pi, run:": "Um die Bridge bei pi zu registrieren, ausführen:",
 		"Tools then appear in pi as": "Tools erscheinen in pi dann als",
 		"See docs/mcp.md for details.": "Details siehe docs/mcp.md.",
+
+		// HTTP cross-site confirm dialog
+		"Allow request to this origin?": "Anfrage an diese Origin erlauben?",
+		"Sitegeist's agent wants to send an HTTP request to a different site than the one you are viewing.":
+			"Sitegeists Agent möchte eine HTTP-Anfrage an eine andere Website senden als die, die du gerade ansiehst.",
+		"Cross-site requests can carry your login session for that site, so the remote server sees the request as coming from you. Only allow origins you trust.":
+			"Cross-Site-Anfragen können deine Login-Sitzung für diese Website enthalten, sodass der Server die Anfrage als von dir kommend sieht. Erlaube nur Origins, denen du vertraust.",
+		"Request origin:": "Anfrage-Origin:",
+		"Active tab:": "Aktiver Tab:",
+		unknown: "unbekannt",
+		"If you allow it, this origin is remembered for the rest of this session.":
+			"Wenn du erlaubst, wird diese Origin für den Rest dieser Sitzung gemerkt.",
+		Deny: "Ablehnen",
+		Allow: "Erlauben",
 	},
 };
 
