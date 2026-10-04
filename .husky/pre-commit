@@ -1,21 +1,42 @@
 #!/bin/sh
 
-# Get list of staged files before running check
-STAGED_FILES=$(git diff --cached --name-only)
+# Re-stage a staged file only when the check itself rewrote it (formatter
+# output). Unconditionally re-adding every staged file would clobber partial
+# (hunk-level) staging and sweep unstaged edits into the commit: the commit
+# should contain exactly what was staged.
 
-# Run the check script (formatting, linting, and type checking)
+staged_list=$(mktemp)
+trap 'rm -f "$staged_list"' EXIT
+git diff --cached --name-only > "$staged_list"
+
+# Snapshot the pre-check working-tree hash of every staged file
+snapshot=""
+while IFS= read -r file; do
+	[ -n "$file" ] || continue
+	[ -f "$file" ] || continue
+	snapshot="$snapshot$(git hash-object -- "$file") $file
+"
+done < "$staged_list"
+
 echo "Running formatting, linting, and type checking..."
-npm run check
-if [ $? -ne 0 ]; then
-  echo "❌ Checks failed. Please fix the errors before committing."
-  exit 1
-fi
+npm run check || {
+	echo "Checks failed. Please fix the errors before committing."
+	exit 1
+}
 
-# Restage files that were previously staged and may have been modified by formatting
-for file in $STAGED_FILES; do
-  if [ -f "$file" ]; then
-    git add "$file"
-  fi
-done
+# Re-stage only files the check modified on disk
+while IFS= read -r line; do
+	[ -n "$line" ] || continue
+	before=${line%% *}
+	file=${line#* }
+	[ -f "$file" ] || continue
+	now=$(git hash-object -- "$file")
+	if [ "$now" != "$before" ]; then
+		git add -- "$file"
+		echo "pre-commit: re-staged $file (modified by the check)"
+	fi
+done <<EOF
+$snapshot
+EOF
 
-echo "✅ All pre-commit checks passed!"
+echo "All pre-commit checks passed!"
