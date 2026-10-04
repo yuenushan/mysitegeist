@@ -1,5 +1,6 @@
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { Input } from "@mariozechner/mini-lit/dist/Input.js";
+import { Switch } from "@mariozechner/mini-lit/dist/Switch.js";
 import { SettingsTab } from "@mariozechner/pi-web-ui";
 import { html } from "lit";
 import { Toast } from "../components/Toast.js";
@@ -15,6 +16,7 @@ export class SkillsTab extends SettingsTab {
 	private editingSkill: Skill | null = null;
 	private importConflicts: { skill: Skill; selected: boolean }[] = [];
 	private importedSkills: Skill[] = [];
+	private networkEnabled = false;
 
 	getTabName(): string {
 		return this.label;
@@ -23,6 +25,11 @@ export class SkillsTab extends SettingsTab {
 	async connectedCallback() {
 		super.connectedCallback();
 		await this.loadSkills();
+		try {
+			this.networkEnabled = (await getSitegeistStorage().settings.get<boolean>("browserjs.network")) === true;
+		} catch {
+			this.networkEnabled = false;
+		}
 	}
 
 	async loadSkills() {
@@ -347,6 +354,22 @@ export class SkillsTab extends SettingsTab {
 
 		return html`
 			<div class="flex flex-col gap-6">
+				<div class="flex items-center justify-between rounded-lg border border-border p-3">
+					<div class="flex flex-col gap-1">
+						<span class="text-sm font-medium text-foreground">Allow skills to access the network</span>
+						<span class="text-xs text-muted-foreground">
+							Skills that declare network access (frontmatter network: true) run in a network-enabled sandbox and can fetch their target hosts. All other skills stay fully offline.
+						</span>
+					</div>
+					${Switch({
+						checked: this.networkEnabled,
+						onChange: async (checked: boolean) => {
+							this.networkEnabled = checked;
+							await getSitegeistStorage().settings.set("browserjs.network", checked);
+						},
+					})}
+				</div>
+
 				<p class="text-sm text-muted-foreground">
 					Manage site skills - reusable JavaScript libraries for domain-specific automation.
 				</p>

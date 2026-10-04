@@ -145,9 +145,10 @@ export class BrowserJsRuntimeProvider implements SandboxRuntimeProvider {
 		// Load skills for current tab URL
 		const skillsRepo = getSitegeistStorage().skills;
 		let skillLibrary = "";
+		let matchingSkills: import("../../storage/stores/skills-store.js").Skill[] = [];
 
 		if (tab.url) {
-			const matchingSkills = await skillsRepo.getSkillsForUrl(tab.url);
+			matchingSkills = await skillsRepo.getSkillsForUrl(tab.url);
 			if (matchingSkills.length > 0) {
 				skillLibrary = `${matchingSkills.map((s) => s.library).join("\n\n")}\n\n`;
 			}
@@ -177,6 +178,36 @@ export class BrowserJsRuntimeProvider implements SandboxRuntimeProvider {
 		const pageConsoleProvider = new ConsoleRuntimeProvider();
 
 		// Build wrapper code with skills, providers (including dedicated console provider), and args
+		// Network-enabled world selection: requires (a) a matching skill declaring network: true
+		// and (b) the user's explicit consent in Settings > Skills. Default world stays fully offline.
+		const NET_WORLD_ID = "sitegeist-browser-script-net";
+		const netSkills = matchingSkills.filter((s) => s.network === true);
+		let useNetWorld = false;
+		let allowedHosts: string[] = [];
+		if (netSkills.length > 0) {
+			const networkEnabled = await getSitegeistStorage().settings.get<boolean>("browserjs.network");
+			if (!networkEnabled) {
+				const names = netSkills.map((s) => s.name).join(", ");
+				respond({
+					success: false,
+					error: `Skill(s) [${names}] request network access, but skill network access is disabled. Enable it in Settings > Skills.`,
+				});
+				this.activeSandboxIds.delete(sandboxId);
+				return;
+			}
+			useNetWorld = true;
+			// union of host allowlists; any skill without an allowlist opens the world fully
+			allowedHosts = [];
+			for (const s of netSkills) {
+				if (!s.allowedHosts || s.allowedHosts.length === 0) {
+					allowedHosts = [];
+					break;
+				}
+				allowedHosts.push(...s.allowedHosts);
+			}
+		}
+		const worldId = useNetWorld ? NET_WORLD_ID : "sitegeist-browser-script";
+
 		const wrapperCode = buildWrapperCode(
 			message.code,
 			skillLibrary,
@@ -184,10 +215,11 @@ export class BrowserJsRuntimeProvider implements SandboxRuntimeProvider {
 			[pageConsoleProvider, ...this.sharedProviders],
 			sandboxId,
 			parsedArgs,
+			useNetWorld ? { allowedHosts } : null,
 		);
 
 		// Use fixed worldId for all executions
-		const FIXED_WORLD_ID = "sitegeist-browser-script";
+		const FIXED_WORLD_ID = worldId;
 
 		// Check if terminate API is available (Chrome 138+)
 		// @ts-expect-error - terminate is not yet in the type definitions
@@ -226,13 +258,21 @@ export class BrowserJsRuntimeProvider implements SandboxRuntimeProvider {
 		try {
 			// Execute via userScripts API
 			if (chrome.userScripts && typeof chrome.userScripts.execute === "function") {
-				// Configure the fixed world with CSP
+				// Configure the world: locked default (offline sandbox) or network-enabled
 				try {
-					await chrome.userScripts.configureWorld({
-						worldId: FIXED_WORLD_ID,
-						messaging: true,
-						csp: "script-src 'unsafe-eval' 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; font-src 'none'; object-src 'none'; default-src 'none';",
-					});
+					if (useNetWorld) {
+						await chrome.userScripts.configureWorld({
+							worldId: FIXED_WORLD_ID,
+							messaging: true,
+							csp: "script-src 'unsafe-eval' 'unsafe-inline'; connect-src *; img-src *; font-src *; media-src *; default-src *;",
+						});
+					} else {
+						await chrome.userScripts.configureWorld({
+							worldId: FIXED_WORLD_ID,
+							messaging: true,
+							csp: "script-src 'unsafe-eval' 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; font-src 'none'; object-src 'none'; default-src 'none';",
+						});
+					}
 				} catch (e) {
 					console.warn("[BrowserJsRuntimeProvider] Failed to configure userScripts world:", e);
 				}

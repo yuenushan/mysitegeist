@@ -137,6 +137,18 @@ const skillParamsSchema = Type.Object({
 				description: "Plain JavaScript code examples (will be rendered in code block)",
 			}),
 			library: Type.String({ description: "JavaScript code to inject" }),
+			network: Type.Optional(
+				Type.Boolean({
+					description:
+						"Set true to run this skill's library in the network-enabled user script world (requires the user to enable skill network access in Settings > Skills). When false/absent the sandbox stays fully offline (connect-src 'none').",
+				}),
+			),
+			allowedHosts: Type.Optional(
+				Type.Array(Type.String(), {
+					description:
+						"With network: true, restrict fetch targets to these hosts (suffix match). Empty/omitted = unrestricted. Enforced by a fetch shadow in the script wrapper (best-effort against accidents, not determined evasion).",
+				}),
+			),
 		}),
 	),
 	updates: Type.Optional(
@@ -282,6 +294,8 @@ export const skillTool: AgentTool<typeof skillParamsSchema, any> = {
 					lastUpdated: now,
 					examples: args.data.examples,
 					library: args.data.library,
+					network: args.data.network === true ? true : undefined,
+					allowedHosts: Array.isArray(args.data.allowedHosts) ? args.data.allowedHosts : undefined,
 				};
 
 				// Validate final library code before saving

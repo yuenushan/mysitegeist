@@ -10,6 +10,10 @@ export interface Skill {
 	lastUpdated: string;
 	examples: string;
 	library: string;
+	/** When true, the library runs in the network-enabled user script world (requires user consent in Settings > Skills). */
+	network?: boolean;
+	/** Optional fetch host allowlist (suffix match) enforced by the wrapper's fetch shadow. */
+	allowedHosts?: string[];
 }
 
 /**

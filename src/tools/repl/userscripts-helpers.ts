@@ -237,6 +237,11 @@ async function wrapperFunction() {
 /**
  * Build the wrapper code by combining safeguards, skill library, providers, and user code
  */
+export interface NetWorldPolicy {
+	/** Fetch host allowlist (suffix match); empty array = unrestricted. Enforced by a fetch shadow. */
+	allowedHosts: string[];
+}
+
 export function buildWrapperCode(
 	userCode: string,
 	skillLibrary: string,
@@ -244,6 +249,7 @@ export function buildWrapperCode(
 	providers: SandboxRuntimeProvider[],
 	sandboxId: string,
 	args?: any[],
+	net?: NetWorldPolicy | null,
 ): string {
 	// Start with wrapper function
 	let code = `(${wrapperFunction.toString()})`;
@@ -258,6 +264,28 @@ export function buildWrapperCode(
 	});
 
 	let providerInjections = `${bridgeCode}\n`;
+
+	// Net-world fetch shadow: allowlist guard placed before skills/user code.
+	// Best-effort against accidents (LLM mistakes, injection-driven fetches);
+	// a determined author could reach an unshadowed fetch - acceptable since
+	// the net world is only entered for skills the user explicitly consented to.
+	if (net) {
+		const hosts = JSON.stringify(net.allowedHosts || []);
+		providerInjections +=
+			[
+				`/* sitegeist-net fetch shadow */`,
+				`(function() {`,
+				`	const __allowedHosts = ${hosts};`,
+				`	const __origFetch = window.fetch.bind(window);`,
+				`	window.fetch = function(input, init) {`,
+				`		let u; try { u = new URL(typeof input === "string" ? input : (input && input.url) || String(input), location.href); } catch (e) { throw new Error("[sitegeist-net] blocked: invalid URL"); }`,
+				`		const ok = __allowedHosts.length === 0 || __allowedHosts.some(function(h) { return u.hostname === h || u.hostname.endsWith("." + h); });`,
+				`		if (!ok) throw new Error("[sitegeist-net] fetch blocked: host not in skill allowlist: " + u.hostname);`,
+				`		return __origFetch(input, init);`,
+				`	};`,
+				`})();`,
+			].join("\n") + "\n";
+	}
 
 	// Register sandbox with RUNTIME_MESSAGE_ROUTER
 	RUNTIME_MESSAGE_ROUTER.registerSandbox(sandboxId, providers, []);
