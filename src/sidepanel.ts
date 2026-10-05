@@ -49,6 +49,7 @@ import { ApiKeyOrOAuthDialog } from "./dialogs/ApiKeyOrOAuthDialog.js";
 import { ApiKeysOAuthTab } from "./dialogs/ApiKeysOAuthTab.js";
 import { BrowsingTab } from "./dialogs/BrowsingTab.js";
 import { CostsTab } from "./dialogs/CostsTab.js";
+import { CustomModelsTab } from "./dialogs/CustomModelsTab.js";
 import { McpTab } from "./dialogs/McpTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
@@ -237,6 +238,7 @@ function openApiKeysDialog(): Promise<void> {
 			[
 				new ProvidersModelsTab(),
 				new ApiKeysOAuthTab(),
+				new CustomModelsTab(),
 				new CostsTab(),
 				new SkillsTab(),
 				new BrowsingTab(),
@@ -1177,6 +1179,7 @@ const renderApp = () => {
 							SettingsDialog.open([
 								new ProvidersModelsTab(),
 								new ApiKeysOAuthTab(),
+								new CustomModelsTab(),
 								new CostsTab(),
 								new SkillsTab(),
 								new BrowsingTab(),

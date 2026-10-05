@@ -153,11 +153,82 @@ declare module "@mariozechner/mini-lit" {
 		"To register the bridge with pi, run:": string;
 		"Tools then appear in pi as": string;
 		"See docs/mcp.md for details.": string;
+
+		// Custom models tab (Wanqing / self-hosted providers)
+		"Custom Models": string;
+		"Configure custom model providers (Wanqing gateway, self-hosted proxies). Saved models appear in the model selector; the API key is stored separately and used when sending.": string;
+		"+ Add provider": string;
+		"+ Wanqing OpenAI": string;
+		"+ Wanqing Anthropic": string;
+		"No custom providers configured.": string;
+		"API type": string;
+		"Base URL": string;
+		"API key (saved — leave empty to keep)": string;
+		"Test connection": string;
+		"Testing...": string;
+		Models: string;
+		"+ Add model": string;
+		"model id (ep-xxx / gpt-...)": string;
+		"display name": string;
+		context: string;
+		"max out": string;
+		del: string;
+		reasoning: string;
+		"image input": string;
+		"Edit provider": string;
+		"Add provider": string;
+		"Wanqing preset": string;
+		Edit: string;
+		models: string;
+		"Name and base URL are required": string;
+		"Add at least one model with an id": string;
+		"Failed to save provider": string;
+		"Failed to load custom providers": string;
+		"Delete this provider and its key?": string;
+		"Save provider": string;
+		Name: string;
+		"API key": string;
 	}
 }
 
 const sitegeistTranslations = {
 	en: {
+		// Custom models tab
+		"Custom Models": "Custom Models",
+		"Configure custom model providers (Wanqing gateway, self-hosted proxies). Saved models appear in the model selector; the API key is stored separately and used when sending.":
+			"Configure custom model providers (Wanqing gateway, self-hosted proxies). Saved models appear in the model selector; the API key is stored separately and used when sending.",
+		"+ Add provider": "+ Add provider",
+		"+ Wanqing OpenAI": "+ Wanqing OpenAI",
+		"+ Wanqing Anthropic": "+ Wanqing Anthropic",
+		"No custom providers configured.": "No custom providers configured.",
+		"API type": "API type",
+		"Base URL": "Base URL",
+		"API key (saved — leave empty to keep)": "API key (saved — leave empty to keep)",
+		"Test connection": "Test connection",
+		"Testing...": "Testing...",
+		Models: "Models",
+		"+ Add model": "+ Add model",
+		"model id (ep-xxx / gpt-...)": "model id (ep-xxx / gpt-...)",
+		"display name": "display name",
+		context: "context",
+		"max out": "max out",
+		del: "del",
+		reasoning: "reasoning",
+		"image input": "image input",
+		"Edit provider": "Edit provider",
+		"Add provider": "Add provider",
+		"Wanqing preset": "Wanqing preset",
+		Edit: "Edit",
+		models: "models",
+		"Name and base URL are required": "Name and base URL are required",
+		"Add at least one model with an id": "Add at least one model with an id",
+		"Failed to save provider": "Failed to save provider",
+		"Failed to load custom providers": "Failed to load custom providers",
+		"Delete this provider and its key?": "Delete this provider and its key?",
+		"Save provider": "Save provider",
+		Name: "Name",
+		"API key": "API key",
+
 		"Permission request failed": "Permission request failed",
 		"JavaScript Execution Permission Required": "JavaScript Execution Permission Required",
 		"This extension needs permission to execute JavaScript code on web pages":
@@ -320,6 +391,41 @@ const sitegeistTranslations = {
 		Allow: "Allow",
 	},
 	de: {
+		// Custom models tab
+		"Custom Models": "Eigene Modelle",
+		"Configure custom model providers (Wanqing gateway, self-hosted proxies). Saved models appear in the model selector; the API key is stored separately and used when sending.":
+			"Eigene Modell-Provider konfigurieren (Wanqing-Gateway, selbst gehostete Proxies). Gespeicherte Modelle erscheinen in der Modellauswahl; der API-Key wird separat gespeichert und beim Senden verwendet.",
+		"+ Add provider": "+ Provider hinzufügen",
+		"+ Wanqing OpenAI": "+ Wanqing OpenAI",
+		"+ Wanqing Anthropic": "+ Wanqing Anthropic",
+		"No custom providers configured.": "Keine eigenen Provider konfiguriert.",
+		"API type": "API-Typ",
+		"Base URL": "Basis-URL",
+		"API key (saved — leave empty to keep)": "API-Key (gespeichert — leer lassen zum Behalten)",
+		"Test connection": "Verbindung testen",
+		"Testing...": "Teste...",
+		Models: "Modelle",
+		"+ Add model": "+ Modell hinzufügen",
+		"model id (ep-xxx / gpt-...)": "Modell-ID (ep-xxx / gpt-...)",
+		"display name": "Anzeigename",
+		context: "Kontext",
+		"max out": "Max. Out",
+		del: "Löschen",
+		reasoning: "Reasoning",
+		"image input": "Bildeingabe",
+		"Edit provider": "Provider bearbeiten",
+		"Add provider": "Provider hinzufügen",
+		"Wanqing preset": "Wanqing-Vorlage",
+		Edit: "Bearbeiten",
+		models: "Modelle",
+		"Name and base URL are required": "Name und Basis-URL sind erforderlich",
+		"Add at least one model with an id": "Mindestens ein Modell mit ID hinzufügen",
+		"Failed to save provider": "Provider konnte nicht gespeichert werden",
+		"Failed to load custom providers": "Eigene Provider konnten nicht geladen werden",
+		"Delete this provider and its key?": "Diesen Provider und seinen Key löschen?",
+		"Save provider": "Provider speichern",
+		Name: "Name",
+		"API key": "API-Key",
 		"Permission request failed": "Berechtigungsanfrage fehlgeschlagen",
 		"JavaScript Execution Permission Required": "JavaScript-Ausführungsberechtigung erforderlich",
 		"This extension needs permission to execute JavaScript code on web pages":
