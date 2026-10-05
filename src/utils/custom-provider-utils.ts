@@ -123,7 +123,7 @@ export async function testConnection(
 		let detail = "";
 		try {
 			const parsed = JSON.parse(text);
-			if (parsed.error && parsed.error.message) detail = ` - ${parsed.error.message}`;
+			if (parsed.error?.message) detail = ` - ${parsed.error.message}`;
 		} catch {
 			if (text) detail = ` - ${text.slice(0, 120)}`;
 		}
