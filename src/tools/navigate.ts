@@ -11,6 +11,7 @@ import { NAVIGATE_TOOL_DESCRIPTION } from "../prompts/prompts.js";
 import { getSitegeistStorage } from "../storage/app-storage.js";
 import type { Skill } from "../storage/stores/skills-store.js";
 import { formatSkills } from "../utils/format-skills.js";
+import { collectPageOutline } from "./page-outline.js";
 import "../utils/i18n-extension.js";
 
 // Track tool-initiated navigations to filter out duplicate navigation messages
@@ -37,6 +38,11 @@ const navigateSchema = Type.Object({
 	newTab: Type.Optional(Type.Boolean({ description: "Set to true to open URL in a new tab instead of current tab" })),
 	listTabs: Type.Optional(Type.Boolean({ description: "Set to true to list all open tabs" })),
 	switchToTab: Type.Optional(Type.Number({ description: "Tab ID to switch to (get IDs from listTabs)" })),
+	outline: Type.Optional(
+		Type.Boolean({
+			description: "Set false to skip the interactive-element overview of the target page (included by default)",
+		}),
+	),
 });
 
 export type NavigateParams = Static<typeof navigateSchema>;
@@ -57,6 +63,8 @@ export interface NavigateResult {
 	skills?: Array<{ name: string; shortDescription: string; fullDetails?: Skill }>;
 	tabs?: TabInfo[];
 	switchedToTab?: number;
+	/** Compact interactive-element overview of the target page (locators + labels). */
+	outline?: string;
 }
 
 // ============================================================================
@@ -223,6 +231,11 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 		const title = updatedTab?.title || "Untitled";
 		const favicon = updatedTab?.favIconUrl;
 
+		// Collect the interactive-element overview (never throws; degrades to a note)
+		const includeOutline = !("outline" in args) || args.outline !== false;
+		const pageOutline =
+			includeOutline && targetTabId !== undefined ? await collectPageOutline(targetTabId) : undefined;
+
 		// Get skills for the final URL
 		const skillsRepo = getSitegeistStorage().skills;
 		const matchingSkills = await skillsRepo.getSkillsForUrl(finalUrl);
@@ -248,6 +261,7 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 			favicon,
 			tabId: targetTabId,
 			skills,
+			...(pageOutline?.outline ? { outline: pageOutline.outline } : {}),
 		};
 
 		// Build output message
@@ -256,6 +270,12 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 			output = `Opened in new tab: ${finalUrl} (tab ${targetTabId})\n`;
 		} else {
 			output = `Navigated to: ${finalUrl} (tab ${targetTabId})\n`;
+		}
+		output += `Title: ${title}\n`;
+		if (pageOutline?.outline) {
+			output += `\n${pageOutline.outline}\n`;
+		} else if (pageOutline?.error) {
+			output += `\n(${pageOutline.error})\n`;
 		}
 
 		output += `\n${skillsOutput}`;
@@ -339,6 +359,10 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 		const title = tab.title || "Untitled";
 		const favicon = tab.favIconUrl;
 
+		// Collect the interactive-element overview (never throws; degrades to a note)
+		const pageOutline =
+			finalUrl && !finalUrl.startsWith("chrome") ? await collectPageOutline(numericTabId) : undefined;
+
 		// Get skills for the tab's URL
 		const skillsRepo = getSitegeistStorage().skills;
 		const matchingSkills = finalUrl ? await skillsRepo.getSkillsForUrl(finalUrl) : [];
@@ -365,10 +389,16 @@ export class NavigateTool implements AgentTool<typeof navigateSchema, NavigateRe
 			tabId: numericTabId,
 			skills,
 			switchedToTab: numericTabId,
+			...(pageOutline?.outline ? { outline: pageOutline.outline } : {}),
 		};
 
 		let output = `Switched to tab ${numericTabId}: ${title}\n`;
 		output += `URL: ${finalUrl}\n`;
+		if (pageOutline?.outline) {
+			output += `\n${pageOutline.outline}\n`;
+		} else if (pageOutline?.error) {
+			output += `\n(${pageOutline.error})\n`;
+		}
 		output += `\n${skillsOutput}`;
 
 		return { content: [{ type: "text", text: output }], details };

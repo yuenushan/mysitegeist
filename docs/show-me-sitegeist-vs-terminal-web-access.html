@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sitegeist vs 终端 Agent：网站访问方式对比</title>
+<style>
+  :root {
+    --ink: #1e293b; --muted: #64748b; --line: #e2e8f0; --bg: #f8fafc; --card: #ffffff;
+    --term: #0d9488; --term-bg: #ecfdf5; --site: #4f46e5; --site-bg: #eef2ff;
+    --warn: #b45309; --warn-bg: #fffbeb; --bad: #dc2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.6; padding: 24px 16px 64px; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  section { margin-bottom: 36px; }
+  h2 { font-size: 16px; margin-bottom: 6px; }
+  h2 .no { color: var(--site); margin-right: 6px; }
+  .lead { font-size: 14px; margin-bottom: 14px; }
+  .lead b { color: var(--site); }
+  .lead em { color: var(--term); font-style: normal; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* call chain */
+  .chain { font-size: 13px; }
+  .chain .node { border-radius: 8px; padding: 7px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .chain .node .t { font-weight: 600; }
+  .chain .node .d { color: var(--muted); font-size: 12px; text-align: right; }
+  .chain .root { background: var(--ink); color: #fff; justify-content: center; font-weight: 600; }
+  .chain .root.term { background: var(--term); }
+  .chain .root.site { background: var(--site); }
+  .chain .leaf.term { background: var(--term-bg); border: 1px solid #a7f3d0; }
+  .chain .leaf.site { background: var(--site-bg); border: 1px solid #c7d2fe; }
+  .arrow { text-align: center; color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  .chain-title { font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+  .chain-title.term { color: var(--term); } .chain-title.site { color: var(--site); }
+
+  /* bars */
+  .bar-row { display: grid; grid-template-columns: 130px 1fr 92px; gap: 8px; align-items: center; font-size: 12.5px; margin-bottom: 7px; }
+  @media (max-width: 560px) { .bar-row { grid-template-columns: 96px 1fr 84px; } }
+  .bar-row .name { text-align: right; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { background: #f1f5f9; border-radius: 4px; height: 16px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  .bar-fill.site { background: var(--site); } .bar-fill.term { background: var(--term); }
+  .bar-fill.err { background: repeating-linear-gradient(45deg, var(--site), var(--site) 4px, #818cf8 4px, #818cf8 8px); }
+  .bar-row .val { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 6px; }
+  .tag.p0 { background: var(--bad); color: #fff; } .tag.p1 { background: var(--warn); color: #fff; } .tag.p2 { background: #cbd5e1; color: var(--ink); }
+  td.sym { width: 34%; } td.fix { width: 38%; }
+  code { background: #f1f5f9; border-radius: 4px; padding: 1px 5px; font-size: 11.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .pk ul { list-style: none; }
+  .pk li { padding: 6px 0 6px 22px; position: relative; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .pk li:last-child { border-bottom: none; }
+  .pk li::before { position: absolute; left: 2px; font-weight: 700; }
+  .pk .win li::before { content: "+"; color: var(--term); }
+  .pk .lose li::before { content: "−"; color: var(--bad); }
+  .pk h3 { font-size: 14px; margin-bottom: 4px; }
+  .pk .card.term h3 { color: var(--term); } .pk .card.site h3 { color: var(--site); }
+
+  .tree { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+  .tree b { color: var(--site); } .tree i { color: var(--term); font-style: normal; } .tree .dim { color: var(--muted); }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 32px; border-top: 1px solid var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sitegeist vs 终端 Agent：网站访问方式对比</h1>
+  <div class="sub">数据：本机 sitegeist 扩展 IndexedDB 中 16 个真实会话、493 次工具调用实测 + src/tools 源码走查 · 2026-10-05</div>
+
+  <section>
+    <h2><span class="no">01</span>结论</h2>
+    <p class="lead">终端赢在<em>快、省、准、可批量</em>；sitegeist 赢在<b>登录态、动态渲染、反爬穿透、人机兜底</b>。不是二选一：最优姿势是终端 agent 通过 sitegeist MCP 直接调度浏览器——本报告的数据就是终端 agent 读 sitegeist 的 IndexedDB 得到的。</p>
+    <div class="grid2 pk">
+      <div class="card term">
+        <h3>终端 agent（search_web / fetch_web / curl）</h3>
+        <ul class="win">
+          <li>省：一次 fetch = 整页 markdown（闲鱼同主题实测 3.3M tokens，终端路径估算 5–15 万）</li>
+          <li>快：可并行，无页面等待与 LLM 往返</li>
+          <li>准：API/正则/脚本，落盘可复现</li>
+          <li>搜索一步到位，不用进 bing 解析 DOM</li>
+        </ul>
+        <ul class="lose">
+          <li>无登录态：闲鱼 / 12306 / 内网 SSO 拿不下来</li>
+          <li>无 JS 渲染：SPA 抓到空壳</li>
+          <li>过不了反爬：403 / 滑块 / 5 秒盾</li>
+          <li>不能交互：点按钮、填表单、多步流程</li>
+        </ul>
+      </div>
+      <div class="card site">
+        <h3>Sitegeist（真实 Chrome 内的 agent）</h3>
+        <ul class="win">
+          <li>登录态红利：闲鱼 9 次导航畅通；12306 勾选乘车人「陈京」成功</li>
+          <li>内网直达：kdb.corp / grafana.corp 带 SSO cookie 直接可操作</li>
+          <li>过反爬：百度/必应 SERP 直接可读可解析</li>
+          <li>JS 渲染 + 视觉 + 人在旁兜底（验证码/扫码）</li>
+        </ul>
+        <ul class="lose">
+          <li>贵：3 个会话烧掉 3.3M / 1.2M / 29.7M tokens</li>
+          <li>慢：每步一次 LLM 往返 + 页面等待</li>
+          <li>脆：手写选择器 + sleep 轮询，超时 ×6</li>
+          <li>无批量原语：关标签页竟用了 191 次 repl</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">02</span>两条调用链</h2>
+    <p class="lead">sitegeist 的<b>navigate 只回 URL + skills 列表</b>（navigate.ts:254-263），看不到页面内容——所以 58 次 navigate 后面永远跟着 repl 补刀；终端一次 fetch 直接拿到正文。</p>
+    <div class="grid2">
+      <div class="card chain">
+        <div class="chain-title term">终端 agent</div>
+        <div class="node root term">LLM（终端 / CLI）</div>
+        <div class="arrow">↓ 1 次调用出结果</div>
+        <div class="node leaf term"><span class="t">search_web(query)</span><span class="d">排名 + 摘要</span></div>
+        <div class="node leaf term"><span class="t">fetch_web(url)</span><span class="d">HTTP + Readability → markdown</span></div>
+        <div class="node leaf term"><span class="t">curl / 脚本</span><span class="d">批量 · 并行 · 精确</span></div>
+        <div class="node leaf term"><span class="t">sitegeist MCP</span><span class="d">登录态/渲染的活外包给扩展</span></div>
+      </div>
+      <div class="card chain">
+        <div class="chain-title site">Sitegeist</div>
+        <div class="node root site">LLM（sidepanel）</div>
+        <div class="arrow">↓ 每步一次往返</div>
+        <div class="node leaf site"><span class="t">navigate(url)</span><span class="d">只回 URL + skills</span></div>
+        <div class="node leaf site"><span class="t">repl(browserjs(fn))</span><span class="d">手写 DOM JS · 占 69%</span></div>
+        <div class="node leaf site"><span class="t">extract_image</span><span class="d">截图回传看页面</span></div>
+        <div class="node leaf site"><span class="t">browser_workspace / skill</span><span class="d">标签页 · 技能 · 产出</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">03</span>实测数据（16 会话 / 493 次调用）</h2>
+    <p class="lead">repl 占 <b>69%</b> 且 21 次报错——页面交互全靠手写 JS，这是成本和脆弱性的总根源。</p>
+    <div class="card">
+      <div class="bar-row"><span class="name">repl</span><div class="bar-track"><div class="bar-fill err" style="width:100%"></div></div><span class="val">338 · 错21</span></div>
+      <div class="bar-row"><span class="name">navigate</span><div class="bar-track"><div class="bar-fill site" style="width:17%"></div></div><span class="val">58 · 错2</span></div>
+      <div class="bar-row"><span class="name">extract_image</span><div class="bar-track"><div class="bar-fill site" style="width:7.7%"></div></div><span class="val">26 · 错5</span></div>
+      <div class="bar-row"><span class="name">skill</span><div class="bar-track"><div class="bar-fill site" style="width:5.3%"></div></div><span class="val">18 · 错6</span></div>
+      <div class="bar-row"><span class="name">artifacts</span><div class="bar-track"><div class="bar-fill site" style="width:3.6%"></div></div><span class="val">12</span></div>
+      <div class="bar-row"><span class="name">browser_workspace</span><div class="bar-track"><div class="bar-fill site" style="width:2px"></div></div><span class="val">1</span></div>
+      <div class="legend">斜纹 = 含错误。browser_workspace 只被用了 1 次，而它的 close_tabs 本可一次完成「关 TAB」任务。</div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:10px">会话 token 成本 top 6（实测）</div>
+      <div class="bar-row"><span class="name">关查询TAB页</span><div class="bar-track"><div class="bar-fill site" style="width:100%"></div></div><span class="val">29.7M / 526msg</span></div>
+      <div class="bar-row"><span class="name">闲鱼购物</span><div class="bar-track"><div class="bar-fill site" style="width:11.1%"></div></div><span class="val">3.3M / 167msg</span></div>
+      <div class="bar-row"><span class="name">书上内容</span><div class="bar-track"><div class="bar-fill site" style="width:4.1%"></div></div><span class="val">1.2M / 88msg</span></div>
+      <div class="bar-row"><span class="name">美债/基金调研</span><div class="bar-track"><div class="bar-fill site" style="width:2.7%"></div></div><span class="val">801K / 63msg</span></div>
+      <div class="bar-row"><span class="name">12306 买票</span><div class="bar-track"><div class="bar-fill site" style="width:2.2%"></div></div><span class="val">654K / 73msg</span></div>
+      <div class="bar-row"><span class="name">抖音游戏</span><div class="bar-track"><div class="bar-fill site" style="width:0.6%"></div></div><span class="val">158K / 22msg</span></div>
+      <div class="legend">条长按真实比例。头部会话的 token 花费 = 大量整页 DOM dump + 截图 + 重复重试。</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">04</span>还能怎么完善：症状 → 根因 → 建议</h2>
+    <p class="lead">提升空间不在「能不能做到」（浏览器什么都能干），而在<b>每次做到的成本</b>。</p>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <tr><th>优先级</th><th class="sym">症状（实测证据）</th><th>根因（代码定位）</th><th class="fix">建议</th></tr>
+        <tr><td><span class="tag p0">P0</span></td><td>58 次 navigate 后永远要补一发 repl 才见内容</td><td>navigate 返回太薄：仅 finalUrl + skills（navigate.ts:254-263）</td><td>navigate 增强：返回 title + 可交互元素概览（带 ref）+ 网络空闲等待</td></tr>
+        <tr><td><span class="tag p0">P0</span></td><td>尾部全是 <code>setTimeout(4000)</code> 手写轮询；Runtime message timeout ×5</td><td>repl 未注入等待原语（runtime-providers.ts 只有 browserjs/http）</td><td>助手库加 <code>waitFor(fn, timeout)</code> / 滚动加载；userscripts-helpers 是现成扩展点</td></tr>
+        <tr><td><span class="tag p1">P1</span></td><td>抖音 iframe 取不到内容，绕道源站 URL；整页 JSON dump 烧 token</td><td>iframe / Shadow DOM 无穿透；无「元素 ref」交互模式</td><td>helper 自动拍平同源 iframe + shadow root；a11y 概览 + click/type 按 ref</td></tr>
+        <tr><td><span class="tag p1">P1</span></td><td>关标签页：526 msgs / 29.7M tokens / 191 次 repl，重复连续调用 max=11</td><td>工具选择漂移，不知有 browser_workspace.close_tabs</td><td>系统 prompt / 默认 skill 写明：标签页批量操作走 list_tabs → close_tabs</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>extract_image：readback failed ×2、activeTab 权限 ×1</td><td>captureVisibleTab 时序竞态 + 权限边界</td><td>失败重试（等一帧 / 降级 jpeg）+ 权限核查</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>skill 自编辑 old_string not found ×5、缺 name ×1</td><td>字符串精确替换太脆</td><td>结构化字段编辑或模糊匹配 + 回显 diff</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>遇登录墙 / 页面生成中只能 sleep 硬等（抖音轮询「AI 回答生成」）</td><td>无 human-in-the-loop 信号</td><td>检测到墙时走 notifications（权限已有）请用户接管</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">05</span>组合决策树</h2>
+    <p class="lead">一句话：<b>要登录态/渲染/看图/人在场 → sitegeist；要快/批量/静态 → 终端；fetch 拿到空壳 → 升级走浏览器。</b></p>
+    <div class="tree">
+需要登录态、JS 渲染、看图、或需要人兜底（验证码/付款）？
+├─ <b>是 → Sitegeist</b> <span class="dim">（真实 Chrome + cookie + 截图，贵但能干成）</span>
+└─ <i>否 → 终端</i> <span class="dim">（search_web / fetch_web / curl，便宜快准）</span>
+        └─ fetch_web 拿到空壳 / 403？
+            └─ <b>升级 → sitegeist MCP</b> <span class="dim">（navigate → repl → extract_document，终端侧直接调度扩展）</span>
+
+<span class="dim"># 量化预期：把 338 次手写 JS 压成 waitFor + 元素概览 + ref 交互等少量高阶原语，</span>
+<span class="dim"># 头部会话有望从 29.7M tokens 压回 30 万以内（同任务下 ≈100 倍）。</span>
+    </div>
+  </section>
+
+  <div class="foot">数据出处：sitegeist-storage v3 · sessions/sessions-metadata store（16 会话全量 toolCall 统计）；代码定位：src/tools/navigate.ts、src/tools/repl/runtime-providers.ts、src/tools/extract-image.ts、static/manifest.chrome.json。终端路径 token 为估算，已标注。</div>
+</div>
+</body>
+</html>

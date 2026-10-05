@@ -21,6 +21,7 @@ import { SkillPill } from "../components/SkillPill.js";
 import { SKILL_TOOL_DESCRIPTION } from "../prompts/prompts.js";
 import { getSitegeistStorage } from "../storage/app-storage.js";
 import type { Skill } from "../storage/stores/skills-store.js";
+import { describeUpdateMiss } from "../utils/update-miss.js";
 import { defaultSkills } from "./default-skills.js";
 
 const getSkills = () => getSitegeistStorage().skills;
@@ -381,7 +382,7 @@ export const skillTool: AgentTool<typeof skillParamsSchema, any> = {
 				if (args.updates.name) {
 					const { old_string, new_string } = args.updates.name;
 					if (!updated.name.includes(old_string)) {
-						throw new Error("Update failed: old_string not found in name field.");
+						throw new Error(describeUpdateMiss("name", updated.name, old_string));
 					}
 					newName = updated.name.replace(old_string, new_string);
 					// Check if new name already exists
@@ -395,22 +396,26 @@ export const skillTool: AgentTool<typeof skillParamsSchema, any> = {
 				if (args.updates.shortDescription) {
 					const { old_string, new_string } = args.updates.shortDescription;
 					if (!updated.shortDescription.includes(old_string)) {
-						throw new Error("Update failed: old_string not found in shortDescription field.");
+						throw new Error(describeUpdateMiss("shortDescription", updated.shortDescription, old_string));
 					}
 					updated.shortDescription = updated.shortDescription.replace(old_string, new_string);
 				}
 
 				if (args.updates.domainPatterns) {
 					const { old_string, new_string } = args.updates.domainPatterns;
+					const before = updated.domainPatterns.join("\n");
 					updated.domainPatterns = updated.domainPatterns.map((pattern) =>
 						pattern.replace(old_string, new_string),
 					);
+					if (updated.domainPatterns.join("\n") === before) {
+						throw new Error(describeUpdateMiss("domainPatterns", before, old_string));
+					}
 				}
 
 				if (args.updates.library) {
 					const { old_string, new_string } = args.updates.library;
 					if (!updated.library.includes(old_string)) {
-						throw new Error("Update failed: old_string not found in library field.");
+						throw new Error(describeUpdateMiss("library", updated.library, old_string));
 					}
 					updated.library = updated.library.replace(old_string, new_string);
 
@@ -424,7 +429,7 @@ export const skillTool: AgentTool<typeof skillParamsSchema, any> = {
 				if (args.updates.description) {
 					const { old_string, new_string } = args.updates.description;
 					if (!updated.description.includes(old_string)) {
-						throw new Error("Update failed: old_string not found in description field.");
+						throw new Error(describeUpdateMiss("description", updated.description, old_string));
 					}
 					updated.description = updated.description.replace(old_string, new_string);
 				}

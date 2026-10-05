@@ -138,9 +138,42 @@ async function fetchAndResizeImage(src: string, maxWidth: number): Promise<Image
 	return { type: "image", data: base64, mimeType: "image/png" };
 }
 
+/** Delays between capture attempts (first attempt is free, then backoff retries). */
+const CAPTURE_RETRY_DELAYS_MS = [250, 600];
+
+/** Maps a captureVisibleTab failure to an actionable message (pure, unit-testable). */
+export function describeCaptureFailure(err: unknown): string {
+	const msg = err instanceof Error ? err.message : String(err);
+	if (/activeTab|all_urls|permission/i.test(msg)) {
+		return (
+			`Cannot capture this tab: ${msg}. ` +
+			"Visible-tab capture works on normal web pages; chrome://, PDF viewer, and extension pages are blocked. " +
+			"Switch to a regular http(s) tab and retry, or use browserjs() to read the page DOM instead."
+		);
+	}
+	if (/readback/i.test(msg)) {
+		return (
+			`Screenshot capture failed after ${CAPTURE_RETRY_DELAYS_MS.length + 1} attempts: ${msg}. ` +
+			"The tab may be GPU-blocked or minimized; bring the tab to the foreground and retry, or use browserjs() to read the page DOM instead."
+		);
+	}
+	return `Screenshot capture failed: ${msg}`;
+}
+
 async function captureScreenshot(maxWidth: number, windowId: number): Promise<ImageContent> {
-	const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
-	return fetchAndResizeImage(dataUrl, maxWidth);
+	let lastError: unknown;
+	for (let attempt = 0; attempt <= CAPTURE_RETRY_DELAYS_MS.length; attempt++) {
+		try {
+			const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+			return await fetchAndResizeImage(dataUrl, maxWidth);
+		} catch (err) {
+			lastError = err;
+			if (attempt < CAPTURE_RETRY_DELAYS_MS.length) {
+				await new Promise((resolve) => setTimeout(resolve, CAPTURE_RETRY_DELAYS_MS[attempt]));
+			}
+		}
+	}
+	throw new Error(describeCaptureFailure(lastError));
 }
 
 export class ExtractImageTool implements AgentTool<typeof extractImageSchema, ExtractImageDetails> {

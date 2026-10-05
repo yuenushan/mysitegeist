@@ -1,5 +1,6 @@
 import type { SandboxRuntimeProvider } from "@mariozechner/pi-web-ui";
 import { RUNTIME_MESSAGE_ROUTER, RuntimeMessageBridge } from "@mariozechner/pi-web-ui";
+import { PAGE_HELPERS_CODE } from "./page-helpers.js";
 
 export interface UserScriptsCheckResult {
 	available: boolean;
@@ -303,6 +304,9 @@ export function buildWrapperCode(
 		const runtimeFunc = provider.getRuntime();
 		providerInjections += `(${runtimeFunc.toString()})(${JSON.stringify(sandboxId)});\n`;
 	}
+
+	// Inject page helpers BEFORE skills so skill libraries can override them
+	providerInjections += `${PAGE_HELPERS_CODE}\n`;
 
 	// Inject skills AFTER providers
 	if (skillLibrary) {
