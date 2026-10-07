@@ -91,6 +91,7 @@ import { HttpRuntimeProvider } from "./tools/repl/http.js";
 import { createReplTool } from "./tools/repl/repl.js";
 import { BrowserJsRuntimeProvider, NavigateRuntimeProvider } from "./tools/repl/runtime-providers.js";
 import { SetupTool } from "./tools/setup.js";
+import { openArtifactInTab } from "./utils/artifact-viewer.js";
 import { buildSessionExportHtml } from "./utils/export-html.js";
 import { normalizeStoredModel } from "./utils/model-utils.js";
 import * as port from "./utils/port.js";
@@ -811,6 +812,9 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 	await chatPanel.setAgent(agent, {
 		sandboxUrlProvider: () => {
 			return chrome.runtime.getURL("sandbox.html");
+		},
+		artifactsOpenExternal: (filename, external) => {
+			openArtifactInTab(filename, external);
 		},
 		onApiKeyRequired: async (provider: string) => {
 			return await ApiKeyOrOAuthDialog.prompt(provider);

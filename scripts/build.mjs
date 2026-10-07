@@ -17,6 +17,7 @@ const entryPoints = {
 	sidepanel: join(packageRoot, "src/sidepanel.ts"),
 	debug: join(packageRoot, "src/debug.ts"),
 	icons: join(packageRoot, "src/icons.ts"),
+	viewer: join(packageRoot, "src/viewer.ts"),
 	background: join(packageRoot, "src/background.ts"),
 };
 

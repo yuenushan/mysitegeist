@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Artifact Viewer</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #1e1e1e;
+        color: #999;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      #iframe-host {
+        flex: 1;
+        min-height: 0;
+      }
+      #status {
+        padding: 16px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading artifact...</div>
+    <div id="iframe-host"></div>
+    <script src="viewer.js"></script>
+  </body>
+</html>
