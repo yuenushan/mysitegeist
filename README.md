@@ -26,7 +26,7 @@ Requirements: Node >= 22 (CI baseline), npm access to the registry, Chrome 141+ 
 git clone git@github.com:yuenushan/mysitegeist.git
 cd mysitegeist
 npm install        # installs deps, links the vendored packages, sets up the Husky hook
-npm run build      # produces dist-chrome/ (gitignored - it does not exist in a fresh clone)
+npm run build      # first run also compiles the vendored packages' dist/; produces dist-chrome/ (gitignored)
 ```
 
 Optional, only for running the full `./check.sh` (marketing site checks): `(cd site && npm install)`.
@@ -51,7 +51,7 @@ sitegeist/
 
 Frozen sources: `badlogic/pi-mono@21950c5ba4` (upstream deleted `packages/web-ui` afterwards, so this snapshot cannot be replaced by a fresh clone) and `mini-lit` 0.2.1, plus local web-ui patches (generic `suggestionProvider` hook, artifacts `openExternal` hooks - see CHANGELOG).
 
-`npm install` links the vendored packages via `file:` dependencies; `overrides` in package.json pins all `@mariozechner/*` resolution to `vendor/` so nothing is ever fetched from the npm registry.
+`npm install` links the vendored packages via `file:` dependencies; `overrides` in package.json pins all `@mariozechner/*` resolution to `vendor/` so nothing is ever fetched from the npm registry. The vendored packages' `dist/` build outputs are not committed - `scripts/build-deps.sh` regenerates them from the committed sources; it runs automatically as part of `npm run build`, `npm run dev` and `./check.sh`, and can be run standalone as `npm run build:deps`.
 
 Start all dev watchers (vendored packages, sitegeist extension, marketing site):
 

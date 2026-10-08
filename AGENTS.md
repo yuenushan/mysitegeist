@@ -6,7 +6,7 @@ If the user did not give you a concrete task, read README.md first.
 ## New machine setup
 This repo is self-contained (upstream deps vendored under `vendor/`). From a fresh clone:
 1. `npm install`
-2. `npm run build` - `dist-chrome/` is gitignored and only exists after this
+2. `npm run build` - the first run also compiles the vendored packages' `dist/` (scripts/build-deps.sh, not committed); `dist-chrome/` is gitignored and only exists after this
 3. Optional: `(cd site && npm install)` to run the full `./check.sh`
 4. Load `dist-chrome/` as an unpacked extension in chrome://extensions (Developer mode); enable "Allow user scripts" and "Allow access to file URLs" in the extension details
 
@@ -105,7 +105,7 @@ when merging upstream changes.
 ### Dependency pinning (IMPORTANT)
 - Upstream deps are vendored IN-REPO under `vendor/` (since 2026-10-08): mini-lit 0.2.1
   and the pi-mono 2026-03-24 snapshot (`21950c5ba4`, packages/ai + agent + web-ui,
-  dist prebuilt). Upstream pi-mono removed `packages/web-ui` on 2026-05-20, so
+  dist/ gitignored - regenerate with `scripts/build-deps.sh`). Upstream pi-mono removed `packages/web-ui` on 2026-05-20, so
   vendor/ can never be replaced by a fresh upstream clone.
 - The vendored web-ui is LOCALLY PATCHED (no upstream equivalent): 14 hand-edited
   files in `src` — a generic `suggestionProvider` hook in
@@ -122,7 +122,15 @@ when merging upstream changes.
   badlogic/pi-mono) is allowlisted via secret-scanning/push-protection-bypasses
   (false_positive). Only new flagged strings in a future vendor refresh need
   another bypass.
-- Vendored dirs keep their upstream `.gitignore`; mini-lit's `dist` line silently dropped its prebuilt dist from the vendor commit (fresh clones failed esbuild resolution of `@mariozechner/mini-lit/dist/*`) - fixed 2026-10-08. When re-vendoring a package, check its `.gitignore` for runtime-needed excludes.
+- The vendored packages' `dist/` outputs are NOT committed (root .gitignore:
+  `vendor/**/dist/`); `scripts/build-deps.sh` regenerates them with a per-package
+  typescript@5 toolchain - upstream ai/agent compile with `tsgo` (pi-mono workspace
+  only, not vendored) and ai's `generate-models` is a network-bound step that is
+  skipped (`src/models.generated.ts` is committed). web-ui and mini-lit must stay
+  on typescript@5: the TS-native compiler mis-emits Lit decorator reactivity (see
+  CHANGELOG). When re-vendoring, check the package's own .gitignore and tsconfig
+  extends for monorepo-root references (web-ui's tsconfig.json extends
+  ../../tsconfig.base.json; the build uses the self-contained tsconfig.build.json).
 - Rebuilding a vendored package: `cd vendor/<pkg> && npm install && npm run build`.
 - The old sibling checkouts `~/workdir/pi-mono` and `~/workdir/mini-lit` are no
   longer used by this repo and can be deleted.

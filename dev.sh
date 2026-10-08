@@ -8,13 +8,9 @@ set -e
 echo "Starting development servers..."
 echo ""
 
-# Vendored packages need their devDependencies installed once (tsc, tailwindcss) to rebuild
-for dep in vendor/mini-lit vendor/pi-mono/packages/ai vendor/pi-mono/packages/agent vendor/pi-mono/packages/web-ui; do
-    if [ ! -d "$dep/node_modules" ]; then
-        echo "Installing dev dependencies in $dep ..."
-        (cd "$dep" && npm install)
-    fi
-done
+# Generate the vendored packages' dist/ (installs their minimal toolchains once);
+# must run before the watchers start so they never build concurrently
+bash scripts/build-deps.sh
 
 # Kill all child processes on exit
 trap 'echo ""; echo "Stopping all dev servers..."; kill 0' EXIT INT TERM

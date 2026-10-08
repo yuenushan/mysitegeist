@@ -7,8 +7,12 @@
 	"main": "dist/background.js",
 	"scripts": {
 		"clean": "rm -rf dist-chrome",
+		"build:deps": "bash ./scripts/build-deps.sh",
 		"build:chrome": "node ./scripts/build.mjs && tailwindcss -i ./src/app.css -o ./dist-chrome/app.css --minify",
-		"build": "npm run build:chrome",
+		"build": "npm run build:deps && npm run build:chrome",
+		"predev": "npm run build:deps",
+		"precheck": "npm run build:deps",
+		"pretypecheck": "npm run build:deps",
 		"dev": "concurrently -n \"build,css,server\" -c \"blue,green,yellow\" \"node ./scripts/build.mjs --watch\" \"tailwindcss -i ./src/app.css -o ./dist-chrome/app.css --watch\" \"node ./scripts/dev-server.mjs\"",
 		"typecheck": "tsc --noEmit",
 		"check": "biome check --write . && tsc --noEmit && cd site && npm run check",
