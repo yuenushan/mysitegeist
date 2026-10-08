@@ -16,32 +16,50 @@ Requires Chrome 141+ or Edge equivalent.
 
 ## Development
 
-Clone this repo plus its sibling dependencies into the same parent directory:
+Sitegeist is self-contained: all upstream dependencies are vendored in this repo under `vendor/`, so a single clone installs and builds with no sibling checkouts.
 
-```
-parent/
-  mini-lit/          # https://github.com/badlogic/mini-lit
-  pi-mono/           # https://github.com/badlogic/pi-mono
-  sitegeist/         # this repo
-```
+### Fresh machine setup
 
-Install dependencies in each repo:
+Requirements: Node >= 22 (CI baseline), npm access to the registry, Chrome 141+ or Edge equivalent.
 
 ```bash
-(cd ../mini-lit && npm install)
-(cd ../pi-mono && npm install)
-npm install
+git clone git@github.com:yuenushan/mysitegeist.git
+cd mysitegeist
+npm install        # installs deps, links the vendored packages, sets up the Husky hook
+npm run build      # produces dist-chrome/ (gitignored - it does not exist in a fresh clone)
 ```
 
-`npm install` sets up the Husky pre-commit hook automatically.
+Optional, only for running the full `./check.sh` (marketing site checks): `(cd site && npm install)`.
 
-Start all dev watchers (mini-lit, pi-mono, sitegeist extension, marketing site):
+Then load the extension (steps in "Loading the extension" below): select `dist-chrome/` as an unpacked extension and enable **Allow user scripts** plus **Allow access to file URLs** in its details page.
+
+Daily loop: edit `src/`, `npm run build`, reload the extension card in chrome://extensions - or start `./dev.sh` for watchers with hot reload. Run `./check.sh` before committing.
+
+### Vendored dependencies
+
+Layout:
+
+```
+sitegeist/
+  vendor/
+    mini-lit/               # @mariozechner/mini-lit 0.2.1 (frozen)
+    pi-mono/packages/
+      ai/                   # @mariozechner/pi-ai 0.62.0 (frozen)
+      agent/                # @mariozechner/pi-agent-core 0.62.0 (frozen)
+      web-ui/               # @mariozechner/pi-web-ui 0.62.0 (frozen + local patches)
+```
+
+Frozen sources: `badlogic/pi-mono@21950c5ba4` (upstream deleted `packages/web-ui` afterwards, so this snapshot cannot be replaced by a fresh clone) and `mini-lit` 0.2.1, plus local web-ui patches (generic `suggestionProvider` hook, artifacts `openExternal` hooks - see CHANGELOG).
+
+`npm install` links the vendored packages via `file:` dependencies; `overrides` in package.json pins all `@mariozechner/*` resolution to `vendor/` so nothing is ever fetched from the npm registry.
+
+Start all dev watchers (vendored packages, sitegeist extension, marketing site):
 
 ```bash
 ./dev.sh
 ```
 
-Changes in `../mini-lit` or `../pi-mono` are rebuilt automatically and picked up by the sitegeist watcher.
+Changes in `vendor/mini-lit` and `vendor/pi-mono/packages/web-ui` are rebuilt automatically and picked up by the sitegeist watcher. After editing `vendor/pi-mono/packages/ai` or `agent`, rebuild manually: `cd vendor/pi-mono/packages/<name> && npm run build`.
 
 To run only the extension watcher without dependencies or the marketing site:
 

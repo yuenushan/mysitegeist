@@ -3,6 +3,15 @@
 ## First Message
 If the user did not give you a concrete task, read README.md first.
 
+## New machine setup
+This repo is self-contained (upstream deps vendored under `vendor/`). From a fresh clone:
+1. `npm install`
+2. `npm run build` - `dist-chrome/` is gitignored and only exists after this
+3. Optional: `(cd site && npm install)` to run the full `./check.sh`
+4. Load `dist-chrome/` as an unpacked extension in chrome://extensions (Developer mode); enable "Allow user scripts" and "Allow access to file URLs" in the extension details
+
+Requires Node >= 22 and Chrome 141+. Do not clone sibling repos (mini-lit, pi-mono) - the vendored copies under `vendor/` are the only valid sources (upstream deleted `packages/web-ui`, and they carry local patches; see Dependency pinning below).
+
 ## Commands
 - After code changes: run `./check.sh`. Fix all errors and warnings before committing.
 - The user runs `./dev.sh` in a separate tmux session. Do not run `npm run dev` or `npm run build`.
@@ -15,9 +24,8 @@ If the user did not give you a concrete task, read README.md first.
 - Always ask before removing functionality or code that appears intentional
 
 ## Dependencies
-- `@mariozechner/mini-lit`, `@mariozechner/pi-ai`, `@mariozechner/pi-web-ui`, `@mariozechner/pi-agent-core` are linked via `file:` to sibling repos `../mini-lit` and `../pi-mono`
-- Changes to those packages require rebuilding them (the dev watcher handles this)
-- If you need to modify upstream code, edit it in `../pi-mono` or `../mini-lit` directly and rebuild
+- `@mariozechner/mini-lit`, `@mariozechner/pi-ai`, `@mariozechner/pi-web-ui`, `@mariozechner/pi-agent-core` are vendored under `vendor/` (file: deps + npm overrides pin all @mariozechner/* resolution there; nothing comes from the npm registry)
+- Changes to those packages are made in place under `vendor/` and require rebuilding that package (`cd vendor/<pkg> && npm install && npm run build`; `./dev.sh` watches mini-lit and web-ui)
 
 ## Changelog
 Location: `CHANGELOG.md`
@@ -95,13 +103,23 @@ when merging upstream changes.
   from here)
 
 ### Dependency pinning (IMPORTANT)
-- `../pi-mono` MUST be the 2026-03-24 snapshot (upstream commit `21950c5ba4`).
-  Upstream pi-mono removed `packages/web-ui` on 2026-05-20, which breaks this
-  repo. The snapshot was installed from a GitHub tarball (no `.git` dir).
-  Do NOT run `git pull` inside `../pi-mono`.
-- `../mini-lit` is at HEAD (0.2.1) and needs `npm run build` once (tsc -> dist/).
-- If `node_modules/@mariozechner/pi-web-ui` resolves to a non-existent path,
-  the pi-mono snapshot was lost — re-download the tarball for `21950c5ba4`.
+- Upstream deps are vendored IN-REPO under `vendor/` (since 2026-10-08): mini-lit 0.2.1
+  and the pi-mono 2026-03-24 snapshot (`21950c5ba4`, packages/ai + agent + web-ui,
+  dist prebuilt). Upstream pi-mono removed `packages/web-ui` on 2026-05-20, so
+  vendor/ can never be replaced by a fresh upstream clone.
+- The vendored web-ui is LOCALLY PATCHED (no upstream equivalent): 14 hand-edited
+  files in `src` — a generic `suggestionProvider` hook in
+  `MessageEditor.ts`/`AgentInterface.ts`/`ChatPanel.ts`/`index.ts` (slash-command
+  menu) and `openExternal`/per-type `getExternalViewContent` hooks in
+  `tools/artifacts/*` + `ChatPanel.ts` + `utils/i18n.ts` (open-in-browser-tab
+  viewer). See sitegeist CHANGELOG for the two features. `src/sidepanel.ts`
+  imports `suggestionProvider` and `artifactsOpenExternal`, which do not exist
+  upstream — do NOT overwrite vendor/ with upstream content.
+- Resolution is pinned by `file:vendor/...` deps plus `overrides` in
+  package.json; nothing under @mariozechner/* resolves from the npm registry.
+- Rebuilding a vendored package: `cd vendor/<pkg> && npm install && npm run build`.
+- The old sibling checkouts `~/workdir/pi-mono` and `~/workdir/mini-lit` are no
+  longer used by this repo and can be deleted.
 
 ### Build & install workflow (this machine)
 - Do NOT use `./dev.sh` / `npm run dev` (watchers + sibling deps are not set

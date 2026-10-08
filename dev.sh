@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Start all development servers for sitegeist and its dependencies
+# Start all development servers for sitegeist and its vendored dependencies
 # Usage: ./dev.sh
 
 set -e
@@ -8,44 +8,41 @@ set -e
 echo "Starting development servers..."
 echo ""
 
-# Check if required directories exist
-if [ ! -d "../pi-mono" ]; then
-    echo "Error: pi-mono not found at ../pi-mono"
-    exit 1
-fi
-
-if [ ! -d "../mini-lit" ]; then
-    echo "Error: mini-lit not found at ../mini-lit"
-    exit 1
-fi
+# Vendored packages need their devDependencies installed once (tsc, tailwindcss) to rebuild
+for dep in vendor/mini-lit vendor/pi-mono/packages/ai vendor/pi-mono/packages/agent vendor/pi-mono/packages/web-ui; do
+    if [ ! -d "$dep/node_modules" ]; then
+        echo "Installing dev dependencies in $dep ..."
+        (cd "$dep" && npm install)
+    fi
+done
 
 # Kill all child processes on exit
 trap 'echo ""; echo "Stopping all dev servers..."; kill 0' EXIT INT TERM
 
-# Start dev servers
-echo "Starting mini-lit dev server..."
-(cd ../mini-lit && npm run dev:tsc) &
-MINI_LIT_PID=$!
+# Start dev servers for the vendored packages
+echo "Starting mini-lit watcher..."
+(cd vendor/mini-lit && npm run dev:tsc) &
 
-echo "Starting pi-mono dev server..."
-(cd ../pi-mono && npm run dev:tsc) &
-PI_MONO_PID=$!
+echo "Starting web-ui watcher..."
+(cd vendor/pi-mono/packages/web-ui && npm run dev:tsc) &
+
+# ai and agent ship prebuilt dist/; after editing their sources rebuild manually:
+#   (cd vendor/pi-mono/packages/ai && npm run build)
+#   (cd vendor/pi-mono/packages/agent && npm run build)
 
 # Wait a moment for dependencies to start building
 sleep 2
 
 echo "Starting sitegeist dev server..."
 npm run dev &
-SITEGEIST_PID=$!
 
 echo "Starting sitegeist site dev server..."
 (cd site && ./run.sh dev) &
-SITE_PID=$!
 
 echo ""
 echo "All dev services started"
 echo "  mini-lit: watching"
-echo "  pi-mono: watching"
+echo "  web-ui: watching"
 echo "  sitegeist: watching"
 echo "  site backend: http://localhost:3000"
 echo "  site frontend: http://localhost:8080"
