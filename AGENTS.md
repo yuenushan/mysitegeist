@@ -122,6 +122,7 @@ when merging upstream changes.
   badlogic/pi-mono) is allowlisted via secret-scanning/push-protection-bypasses
   (false_positive). Only new flagged strings in a future vendor refresh need
   another bypass.
+- Vendored dirs keep their upstream `.gitignore`; mini-lit's `dist` line silently dropped its prebuilt dist from the vendor commit (fresh clones failed esbuild resolution of `@mariozechner/mini-lit/dist/*`) - fixed 2026-10-08. When re-vendoring a package, check its `.gitignore` for runtime-needed excludes.
 - Rebuilding a vendored package: `cd vendor/<pkg> && npm install && npm run build`.
 - The old sibling checkouts `~/workdir/pi-mono` and `~/workdir/mini-lit` are no
   longer used by this repo and can be deleted.
