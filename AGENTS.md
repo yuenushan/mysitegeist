@@ -117,6 +117,11 @@ when merging upstream changes.
   upstream — do NOT overwrite vendor/ with upstream content.
 - Resolution is pinned by `file:vendor/...` deps plus `overrides` in
   package.json; nothing under @mariozechner/* resolves from the npm registry.
+- GitHub push protection: the google-antigravity OAuth client id/secret in
+  vendor/ (upstream-public desktop PKCE credentials, byte-identical to
+  badlogic/pi-mono) is allowlisted via secret-scanning/push-protection-bypasses
+  (false_positive). Only new flagged strings in a future vendor refresh need
+  another bypass.
 - Rebuilding a vendored package: `cd vendor/<pkg> && npm install && npm run build`.
 - The old sibling checkouts `~/workdir/pi-mono` and `~/workdir/mini-lit` are no
   longer used by this repo and can be deleted.
