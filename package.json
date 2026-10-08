@@ -16,10 +16,10 @@
 	},
 	"dependencies": {
 		"@mariozechner/jailjs": "^0.1.0",
-		"@mariozechner/mini-lit": "file:../mini-lit",
-		"@mariozechner/pi-agent-core": "file:../pi-mono/packages/agent",
-		"@mariozechner/pi-ai": "file:../pi-mono/packages/ai",
-		"@mariozechner/pi-web-ui": "file:../pi-mono/packages/web-ui",
+		"@mariozechner/mini-lit": "file:vendor/mini-lit",
+		"@mariozechner/pi-agent-core": "file:vendor/pi-mono/packages/agent",
+		"@mariozechner/pi-ai": "file:vendor/pi-mono/packages/ai",
+		"@mariozechner/pi-web-ui": "file:vendor/pi-mono/packages/web-ui",
 		"@sinclair/typebox": "^0.34.41",
 		"chart.js": "^4.5.1",
 		"docx-preview": "^0.3.7",
@@ -35,6 +35,12 @@
 		"three": "^0.180.0",
 		"tsx": "^4.20.6",
 		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+	},
+	"overrides": {
+		"@mariozechner/mini-lit": "file:vendor/mini-lit",
+		"@mariozechner/pi-agent-core": "file:vendor/pi-mono/packages/agent",
+		"@mariozechner/pi-ai": "file:vendor/pi-mono/packages/ai",
+		"@mariozechner/pi-web-ui": "file:vendor/pi-mono/packages/web-ui"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.5",
