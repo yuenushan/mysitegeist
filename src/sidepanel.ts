@@ -890,8 +890,13 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				active: true,
 				currentWindow: true,
 			});
-			if (!tab?.url || tab.url.startsWith("chrome-extension://") || tab.url.startsWith("moz-extension://"))
-				return false;
+			// Only inject navigation context when the active tab is a normal web page.
+			// On chrome:// or extension pages (e.g. the artifact viewer) skip the nav
+			// message but still let the send go through (do NOT return false - that
+			// cancels the send and silently eats the message).
+			const tabUrl = tab?.url;
+			const isWebTab =
+				!!tabUrl && !tabUrl.startsWith("chrome-extension://") && !tabUrl.startsWith("moz-extension://");
 
 			// Find most recent navigation (either nav message or nav tool result)
 			let lastUrl: string | undefined;
@@ -907,9 +912,9 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				}
 			}
 
-			// Only add if URL changed
-			if (!lastUrl || lastUrl !== tab.url) {
-				const navMessage = await createNavigationMessage(tab.url, tab.title || "Untitled", tab.favIconUrl, tab.id);
+			// Only add if URL changed and we have a web tab
+			if (isWebTab && tab && tabUrl && (!lastUrl || lastUrl !== tabUrl)) {
+				const navMessage = await createNavigationMessage(tabUrl, tab.title || "Untitled", tab.favIconUrl, tab.id);
 				agent.appendMessage(navMessage);
 			}
 		},
